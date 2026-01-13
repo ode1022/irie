@@ -1,0 +1,383 @@
+#!/bin/bash
+
+# Git worktree自動セットアップスクリプト（Traefik版・共有DB対応）
+# Usage: ./setup_worktree_traefik.sh <branch-name-or-dir-name> [options]
+# Example:
+#   ./setup_worktree_traefik.sh feat/new-feature
+#   ./setup_worktree_traefik.sh app7
+#   ./setup_worktree_traefik.sh main --root    # → <project>.localhost（ルートドメイン）
+#   ./setup_worktree_traefik.sh feat/new-feature --base main  # mainブランチから派生
+
+set -e  # エラーが発生したら即座に終了
+
+# カラー出力用
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# irieディレクトリ（このスクリプトの場所）
+IRIE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SHARED_SERVICES_DIR="${IRIE_DIR}/shared-services"
+
+# ヘルパー関数を読み込み
+source "${IRIE_DIR}/lib/helpers.sh"
+source "${IRIE_DIR}/lib/git-helpers.sh"
+
+# カレントディレクトリを基準とする
+CURRENT_DIR="$(pwd)"
+
+# Bare構成のプロジェクトルートかどうかを判定
+# プロジェクトルートの場合はmainフォルダを使用、worktree内の場合はそのフォルダを使用
+if [ -d "$CURRENT_DIR/.bare" ]; then
+    # プロジェクトルートから実行 → mainフォルダを使用
+    if [ -d "$CURRENT_DIR/main" ]; then
+        WORK_DIR="$CURRENT_DIR/main"
+        PROJECT_ROOT="$CURRENT_DIR"
+        echo -e "${BLUE}プロジェクトルートから実行: mainフォルダを使用${NC}"
+    else
+        echo -e "${RED}エラー: mainフォルダが見つかりません${NC}"
+        exit 1
+    fi
+elif is_bare_structure "$CURRENT_DIR"; then
+    # worktree内から実行 → そのフォルダを使用
+    WORK_DIR="$CURRENT_DIR"
+    PROJECT_ROOT=$(find_project_root "$CURRENT_DIR")
+else
+    # 通常のgit構成
+    WORK_DIR="$CURRENT_DIR"
+    PROJECT_ROOT=""
+fi
+
+# プロジェクト名を取得（gitリポジトリ名優先、なければカレントディレクトリ名）
+if git_cmd config --get remote.origin.url &>/dev/null; then
+    PROJECT_NAME=$(basename -s .git "$(git_cmd config --get remote.origin.url)")
+elif [ -n "$PROJECT_ROOT" ]; then
+    PROJECT_NAME=$(basename "$PROJECT_ROOT")
+else
+    PROJECT_NAME=$(basename "$(pwd)")
+fi
+# コンテナ名用（ハイフン区切り）
+PROJECT_PREFIX="${PROJECT_NAME}"
+# DB名用（アンダースコア区切り）
+DB_PREFIX=$(echo "$PROJECT_NAME" | tr '-' '_')
+
+# ベースドメイン（プロジェクト名.localhost）
+BASE_DOMAIN="${PROJECT_NAME}.localhost"
+
+# 引数解析
+USE_ROOT_DOMAIN=false
+SEPARATE_DB=false  # デフォルト: mainと同じDB名を使用
+BASE_BRANCH=""
+BRANCH_NAME=""
+
+show_help() {
+    cat << EOF
+irie add - worktreeを作成（Traefik + 共有DB方式）
+
+使い方:
+  irie add <branch-name> [options]
+
+オプション:
+  --root              ルートドメインで作成（<project>.localhost）
+  --base <branch>     指定したブランチから派生
+  --separate-db       専用DBを使用（マイグレーション実行）
+  -h, --help          このヘルプを表示
+
+例:
+  irie add feat/new-feature                # → mainと同じDBを使用
+  irie add feat/new-feature --separate-db  # → 専用DBを使用
+  irie add app7                            # → app7.<project>.localhost
+  irie add main --root                     # → <project>.localhost
+  irie add feat/new-feature --base origin/main
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --root)
+            USE_ROOT_DOMAIN=true
+            shift
+            ;;
+        --separate-db)
+            SEPARATE_DB=true
+            shift
+            ;;
+        --base)
+            BASE_BRANCH="$2"
+            shift 2
+            ;;
+        *)
+            if [ -z "$BRANCH_NAME" ]; then
+                BRANCH_NAME=$1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# 引数チェック
+if [ -z "$BRANCH_NAME" ]; then
+    echo -e "${RED}エラー: ブランチ名またはディレクトリ名を指定してください${NC}"
+    echo "Usage: $0 <branch-name-or-dir-name> [--root] [--base <branch>]"
+    echo ""
+    echo "Examples:"
+    echo "  $0 feat/new-feature                # → new-feature.<project>.localhost"
+    echo "  $0 app7                             # → app7.<project>.localhost"
+    echo "  $0 main --root                      # → <project>.localhost（ルートドメイン）"
+    echo "  $0 feat/new-feature --base main          # → mainブランチから派生"
+    echo "  $0 feat/new-feature --base origin/main   # → リモートのmainから派生"
+    exit 1
+fi
+
+# ブランチ名かディレクトリ名かを判定して処理
+if [[ "$BRANCH_NAME" == *"/"* ]]; then
+    # スラッシュを含む場合はブランチ名として扱う
+    # feat/ プレフィックスを削除してからスラッシュをハイフンに置換
+    TEMP_NAME=${BRANCH_NAME#feat/}
+    DIR_NAME=${TEMP_NAME//\//-}
+else
+    # スラッシュを含まない場合はディレクトリ名として扱う
+    DIR_NAME=$BRANCH_NAME
+fi
+
+# チケットシステムのプロジェクトキーを削除（Backlog/Jira/Linear対応）
+# 例: PROJ_NAME-123-new-feature → 123-new-feature
+STRIPPED_DIR=$(strip_ticket_project_key "$DIR_NAME")
+
+# ディレクトリ名からサブドメインを生成（小文字変換、アンダースコアをハイフンに）
+SUBDOMAIN=$(echo "$STRIPPED_DIR" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+# FQDN生成（--rootフラグがある場合はルートドメインのみ）
+# TRAEFIK_IDはTraefikルーター名に使われるため、プロジェクト名を含めてユニークにする
+if [ "$USE_ROOT_DOMAIN" = true ]; then
+    FQDN="${BASE_DOMAIN}"
+    # ルートドメインの場合、Traefik用の識別子はプロジェクト名
+    TRAEFIK_ID="${PROJECT_NAME}"
+else
+    FQDN="${SUBDOMAIN}.${BASE_DOMAIN}"
+    TRAEFIK_ID="${PROJECT_NAME}-${SUBDOMAIN}"
+fi
+
+# DB名を生成（チケットキー削除、長さ制限52文字）
+# 両方のDB名を生成（post-setup.shで用途に応じて使い分け可能）
+SAME_DB_NAME=$(generate_safe_db_name "$PROJECT_NAME" "main")
+SEPARATE_DB_NAME=$(generate_safe_db_name "$PROJECT_NAME" "$DIR_NAME")
+
+# 現在のモードに応じたDB名を設定
+if [ "$SEPARATE_DB" = "true" ]; then
+    DB_NAME="$SEPARATE_DB_NAME"
+else
+    DB_NAME="$SAME_DB_NAME"
+fi
+
+echo ""
+echo -e "${BLUE}=== Git Worktree セットアップ開始（Traefik版） ===${NC}"
+echo -e "${YELLOW}ブランチ名: ${BRANCH_NAME}${NC}"
+echo -e "${YELLOW}ディレクトリ名: ${DIR_NAME}${NC}"
+echo -e "${YELLOW}ホスト名: ${FQDN}${NC}"
+echo -e "${YELLOW}データベース名: ${DB_NAME}${NC}"
+if [ "$SEPARATE_DB" = "true" ]; then
+    echo -e "${YELLOW}DBモード: 専用DB（マイグレーション実行）${NC}"
+else
+    echo -e "${YELLOW}DBモード: mainと共有（マイグレーションをスキップ）${NC}"
+fi
+if [ -n "$BASE_BRANCH" ]; then
+    echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
+fi
+echo ""
+
+# 1. git worktreeを作成
+echo ""
+echo -e "${GREEN}[1/6] Git worktreeを作成中...${NC}"
+WORKTREE_PATH="${WORK_DIR}/../${DIR_NAME}"
+if [ -d "$WORKTREE_PATH" ]; then
+    echo -e "${YELLOW}警告: worktree '$DIR_NAME' は既に存在します${NC}"
+else
+    # Bare構成の場合は.bare内から実行して相対パスを維持
+    # 注: --relative-paths は必須。絶対パスだとJetBrains IDE + WSL2環境でgit連携が動作しない
+    # https://youtrack.jetbrains.com/issue/IJPL-72834
+    if [ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT/.bare" ]; then
+        cd "$PROJECT_ROOT/.bare"
+        if [ -n "$BASE_BRANCH" ]; then
+            echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
+            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
+        else
+            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" 2>/dev/null || git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
+        fi
+    else
+        cd "$WORK_DIR"
+        if [ -n "$BASE_BRANCH" ]; then
+            echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
+            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
+        else
+            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" 2>/dev/null || git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
+        fi
+    fi
+    echo -e "${GREEN}✓ Worktree作成完了${NC}"
+fi
+
+# 2. docker-compose.override.ymlを生成
+TEMPLATE_FILE="${WORK_DIR}/docker-compose.override.traefik-example.yml"
+OVERRIDE_FILE="${WORKTREE_PATH}/docker-compose.override.yml"
+HAS_DOCKER_TEMPLATE=false
+
+if [ -f "$TEMPLATE_FILE" ]; then
+    HAS_DOCKER_TEMPLATE=true
+    echo -e "${GREEN}[2/6] docker-compose.override.ymlを生成中（Traefik設定）...${NC}"
+
+    # テンプレートをコピーしてプレースホルダーを置換
+    cp "$TEMPLATE_FILE" "$OVERRIDE_FILE"
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/{{DIR_NAME}}/${DIR_NAME}/g" "$OVERRIDE_FILE"
+        sed -i '' "s/{{FQDN}}/${FQDN}/g" "$OVERRIDE_FILE"
+        sed -i '' "s/{{TRAEFIK_ID}}/${TRAEFIK_ID}/g" "$OVERRIDE_FILE"
+        sed -i '' "s/{{DB_NAME}}/${DB_NAME}/g" "$OVERRIDE_FILE"
+    else
+        sed -i "s/{{DIR_NAME}}/${DIR_NAME}/g" "$OVERRIDE_FILE"
+        sed -i "s/{{FQDN}}/${FQDN}/g" "$OVERRIDE_FILE"
+        sed -i "s/{{TRAEFIK_ID}}/${TRAEFIK_ID}/g" "$OVERRIDE_FILE"
+        sed -i "s/{{DB_NAME}}/${DB_NAME}/g" "$OVERRIDE_FILE"
+    fi
+    echo -e "${GREEN}✓ docker-compose.override.yml生成完了${NC}"
+else
+    echo -e "${YELLOW}[2/6] docker-compose.override.ymlをスキップ（テンプレートなし）${NC}"
+fi
+
+# 4. hostsファイル更新（*.localhostは不要）
+if [ "$HAS_DOCKER_TEMPLATE" = true ]; then
+    echo -e "${GREEN}[3/6] hostsファイル確認...${NC}"
+    echo -e "${BLUE}  → *.localhost ドメインはhosts設定不要（ブラウザが自動解決）${NC}"
+fi
+
+# 5. Dockerコンテナを起動（docker-compose.yamlがある場合のみ）
+cd "$WORKTREE_PATH"
+if [ -f "docker-compose.yaml" ] || [ -f "docker-compose.yml" ]; then
+    echo -e "${GREEN}[4/6] Dockerコンテナを起動中...${NC}"
+
+    # shared-servicesの定義ファイルを準備（テンプレートからコピー）
+    setup_shared_service() {
+        local SERVICE_NAME=$1
+        local SERVICE_FILE="${SHARED_SERVICES_DIR}/${SERVICE_NAME}.yml"
+        local TEMPLATE_FILE="${SHARED_SERVICES_DIR}/templates/${SERVICE_NAME}.yml"
+
+        if [ ! -f "$SERVICE_FILE" ]; then
+            if [ -f "$TEMPLATE_FILE" ]; then
+                echo -e "${BLUE}  → ${SERVICE_NAME}.yml をテンプレートからコピー${NC}"
+                cp "$TEMPLATE_FILE" "$SERVICE_FILE"
+            else
+                echo -e "${RED}エラー: テンプレート ${TEMPLATE_FILE} が見つかりません${NC}"
+                exit 1
+            fi
+        fi
+    }
+
+    # Traefikの起動を確認（複数プロジェクトで共有、テンプレートがある場合のみ）
+    if [ "$HAS_DOCKER_TEMPLATE" = true ]; then
+        TRAEFIK_CONTAINER="shared-traefik"
+        if ! docker ps --format '{{.Names}}' | grep -q "${TRAEFIK_CONTAINER}"; then
+            echo -e "${BLUE}  → Traefikを起動中...${NC}"
+
+            # traefik.ymlをテンプレートからコピー
+            setup_shared_service "traefik"
+
+            # generate-certs.shをテンプレートからコピー（存在しない場合）
+            GENERATE_CERTS="${SHARED_SERVICES_DIR}/generate-certs.sh"
+            if [ ! -f "$GENERATE_CERTS" ]; then
+                cp "${SHARED_SERVICES_DIR}/templates/generate-certs.sh" "$GENERATE_CERTS"
+                chmod +x "$GENERATE_CERTS"
+            fi
+
+            # 証明書を生成（存在しない場合のみ）
+            cd "$SHARED_SERVICES_DIR"
+            bash "$GENERATE_CERTS"
+
+            # Traefikを起動
+            docker compose -f traefik.yml up -d
+        fi
+        echo -e "${GREEN}  ✓ Traefikは起動中${NC}"
+    fi
+
+    # worktreeのコンテナを起動
+    cd "$WORKTREE_PATH"
+    docker compose up -d
+    echo -e "${GREEN}✓ Dockerコンテナ起動完了${NC}"
+else
+    echo -e "${YELLOW}[4/6] Dockerコンテナ起動をスキップ（docker-compose.yamlなし）${NC}"
+fi
+
+# 5. 初期セットアップコマンドを実行
+echo -e "${GREEN}[5/6] 初期セットアップコマンドを実行中...${NC}"
+
+# post-setup.shが存在すれば実行
+if [ -f "${WORK_DIR}/post-setup.sh" ]; then
+    echo -e "${BLUE}  → post-setup.sh を実行中...${NC}"
+    # 環境変数をエクスポートしてpost-setup.shを実行
+    export WORKTREE_DIR="$DIR_NAME"
+    export WORKTREE_BRANCH="$BRANCH_NAME"
+    export WORKTREE_FQDN="$FQDN"
+    export WORKTREE_DB_NAME="$DB_NAME"
+    export WORKTREE_SEPARATE_DB_NAME="$SEPARATE_DB_NAME"
+    export WORKTREE_USE_SEPARATE_DB="$SEPARATE_DB"
+    export WORKTREE_SOURCE_DIR="$WORK_DIR"
+    export WORKTREE_TRAEFIK_ID="$TRAEFIK_ID"
+    export IRIE_LIB_DIR="${IRIE_DIR}/lib"
+    cd "$WORKTREE_PATH"
+    bash "${WORK_DIR}/post-setup.sh"
+else
+    echo -e "${YELLOW}  → post-setup.sh が見つかりません（スキップ）${NC}"
+    echo -e "${YELLOW}    プロジェクト固有の初期化処理が必要な場合は${NC}"
+    echo -e "${YELLOW}    ${WORK_DIR}/post-setup.sh を作成してください${NC}"
+fi
+
+# 6. worktree情報を保存（irie info, irie removeで使用）
+IRIE_WORKTREES_DIR="$HOME/.irie/worktrees/${PROJECT_NAME}"
+mkdir -p "$IRIE_WORKTREES_DIR"
+cat > "${IRIE_WORKTREES_DIR}/${DIR_NAME}.vars" << EOF
+WORKTREE_PATH=$(realpath "$WORKTREE_PATH")
+WORKTREE_USE_SEPARATE_DB=${SEPARATE_DB}
+WORKTREE_SEPARATE_DB_NAME=${SEPARATE_DB_NAME}
+WORKTREE_DB_NAME=${DB_NAME}
+EOF
+
+# 7. アクセス情報を表示
+echo ""
+echo -e "${GREEN}[6/6] セットアップ完了${NC}"
+echo ""
+echo -e "${GREEN}=== セットアップ完了 ===${NC}"
+echo -e "${BLUE}作業ディレクトリ: $(realpath "$WORKTREE_PATH")${NC}"
+echo ""
+echo -e "${YELLOW}アクセスURL:${NC}"
+echo -e "  http://${FQDN}/"
+
+# post-setup.shのirie_info関数があれば呼び出してプロジェクト固有URLを表示
+if [ -f "${WORK_DIR}/post-setup.sh" ]; then
+    PROJECT_INFO=$(
+        export IRIE_INFO_ONLY=true
+        source "${WORK_DIR}/post-setup.sh" 2>/dev/null || true
+        if declare -f irie_info &>/dev/null; then
+            irie_info
+        fi
+    )
+    if [ -n "$PROJECT_INFO" ]; then
+        echo ""
+        echo -e "${YELLOW}プロジェクト固有URL:${NC}"
+        echo "$PROJECT_INFO" | while IFS='=' read -r key value; do
+            printf "  %-10s %s\n" "${key}:" "$value"
+        done
+    fi
+fi
+
+echo ""
+echo -e "${YELLOW}Traefikダッシュボード:${NC}"
+echo -e "  http://traefik.localhost/"
+echo ""
+
+# シェル統合用マーカー（自動cd用）
+echo "__IRIE_CD__:$(realpath "$WORKTREE_PATH")"

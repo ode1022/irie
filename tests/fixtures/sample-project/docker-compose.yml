@@ -1,0 +1,10 @@
+# irie テスト用最小構成
+# nginx:alpine のみ
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro

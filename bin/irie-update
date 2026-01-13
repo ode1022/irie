@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# irie update - 自己更新スクリプト
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# カラー出力用
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+show_help() {
+    cat << 'EOF'
+irie update - irieを最新版に更新
+
+使い方:
+  irie update [options]
+
+オプション:
+  -h, --help    このヘルプを表示
+
+説明:
+  git pull --ff-only を実行してirieを最新版に更新します。
+  ローカルで変更がある場合は更新を中断します。
+EOF
+}
+
+# 引数解析
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}エラー: 不明なオプション: $1${NC}"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+echo -e "${BLUE}irieを更新中...${NC}"
+cd "$IRIE_DIR"
+
+# 現在のバージョン（コミットハッシュ）を記録
+OLD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+# 更新実行
+if git pull --ff-only; then
+    NEW_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
+        echo -e "${GREEN}✓ 既に最新版です (${NEW_COMMIT})${NC}"
+    else
+        echo -e "${GREEN}✓ 更新完了: ${OLD_COMMIT} → ${NEW_COMMIT}${NC}"
+
+        # 補完スクリプトも更新
+        if [ -f "$HOME/.local/share/bash-completion/completions/irie" ] || \
+           [ -f "$HOME/.zsh/completions/_irie" ]; then
+            echo -e "${BLUE}補完スクリプトを更新中...${NC}"
+            "$IRIE_DIR/bin/irie-completion" install 2>/dev/null || true
+        fi
+    fi
+else
+    echo -e "${RED}エラー: 更新に失敗しました${NC}"
+    echo -e "${YELLOW}ローカルで変更がある場合は、先にコミットまたはstashしてください${NC}"
+    exit 1
+fi

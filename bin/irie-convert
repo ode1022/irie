@@ -1,0 +1,248 @@
+#!/bin/bash
+
+# irie convert - 既存リポジトリをBareリポジトリ構成に変換
+# 使い方: irie convert [directory]
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${IRIE_DIR}/lib/git-helpers.sh"
+
+show_help() {
+    cat << 'EOF'
+irie convert - 既存リポジトリをBareリポジトリ構成に変換
+
+使い方:
+  irie convert [directory]
+
+引数:
+  directory   変換するリポジトリのディレクトリ（省略時はカレント）
+
+オプション:
+  --dry-run   実行せずに変換内容を表示
+  -h, --help  このヘルプを表示
+
+例:
+  cd my-project && irie convert
+  irie convert /path/to/my-project
+
+変換前:
+  parent/
+  └── my-project/
+      ├── .git/        # 通常のgitディレクトリ
+      └── src/
+
+変換後:
+  parent/
+  └── my-project/
+      ├── .bare/       # Bareリポジトリ
+      └── main/        # 元の作業ディレクトリがworktreeに
+          └── src/
+
+注意:
+  - 未コミットの変更がある場合は警告します
+  - 既存のworktreeがある場合は変換できません
+EOF
+}
+
+# 引数解析
+TARGET_DIR=""
+DRY_RUN=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -*)
+            echo -e "${RED}エラー: 不明なオプション: $1${NC}"
+            exit 1
+            ;;
+        *)
+            if [ -z "$TARGET_DIR" ]; then
+                TARGET_DIR="$1"
+            else
+                echo -e "${RED}エラー: 引数が多すぎます${NC}"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# ターゲットディレクトリを決定
+if [ -z "$TARGET_DIR" ]; then
+    TARGET_DIR="$(pwd)"
+fi
+
+# 絶対パスに変換
+TARGET_DIR=$(cd "$TARGET_DIR" && pwd)
+
+# gitリポジトリかチェック
+if [ ! -d "$TARGET_DIR/.git" ]; then
+    echo -e "${RED}エラー: gitリポジトリではありません: $TARGET_DIR${NC}"
+    exit 1
+fi
+
+# すでにBare構成かチェック
+if [ -d "$TARGET_DIR/.bare" ]; then
+    echo -e "${RED}エラー: すでにBare構成です${NC}"
+    exit 1
+fi
+
+# worktreeファイル（.gitがファイルの場合）かチェック
+if [ -f "$TARGET_DIR/.git" ]; then
+    echo -e "${RED}エラー: このディレクトリはworktreeです。メインリポジトリで実行してください${NC}"
+    exit 1
+fi
+
+# 既存worktreeをチェック
+cd "$TARGET_DIR"
+WORKTREE_COUNT=$(git worktree list | wc -l)
+if [ "$WORKTREE_COUNT" -gt 1 ]; then
+    echo -e "${RED}エラー: 既存のworktreeがあります。先に削除してください${NC}"
+    git worktree list
+    exit 1
+fi
+
+# 未コミット変更をチェック
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo -e "${YELLOW}警告: 未コミットの変更があります${NC}"
+    git status --short
+    echo ""
+    read -p "続行しますか？ [y/N]: " -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "キャンセルしました"
+        exit 1
+    fi
+fi
+
+# 現在のブランチを取得
+CURRENT_BRANCH=$(git branch --show-current)
+if [ -z "$CURRENT_BRANCH" ]; then
+    CURRENT_BRANCH="main"
+fi
+
+# プロジェクト名を取得
+PROJECT_NAME=$(basename "$TARGET_DIR")
+PARENT_DIR=$(dirname "$TARGET_DIR")
+
+echo -e "${BLUE}=== irie convert ===${NC}"
+echo -e "対象: $TARGET_DIR"
+echo -e "ブランチ: $CURRENT_BRANCH"
+echo ""
+
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}[dry-run] 以下の操作を実行します:${NC}"
+    echo ""
+    echo "1. $TARGET_DIR/.git/ を $PARENT_DIR/$PROJECT_NAME-temp/.bare/ に移動"
+    echo "2. $TARGET_DIR/ を $PARENT_DIR/$PROJECT_NAME-temp/main/ に移動"
+    echo "3. $PARENT_DIR/$PROJECT_NAME-temp/ を $TARGET_DIR/ にリネーム"
+    echo "4. worktreeを再構成"
+    echo ""
+    echo -e "変換後の構成:"
+    echo "  $TARGET_DIR/"
+    echo "  ├── .bare/"
+    echo "  └── main/"
+    exit 0
+fi
+
+echo -e "${BLUE}  → 変換を開始します...${NC}"
+
+# 一時ディレクトリを作成
+TEMP_DIR="$PARENT_DIR/${PROJECT_NAME}-irie-convert-temp"
+if [ -d "$TEMP_DIR" ]; then
+    rm -rf "$TEMP_DIR"
+fi
+mkdir -p "$TEMP_DIR"
+
+# .git を .bare として移動
+echo -e "${BLUE}  → .git/ を .bare/ に変換中...${NC}"
+mv "$TARGET_DIR/.git" "$TEMP_DIR/.bare"
+
+# bareリポジトリとして設定
+git --git-dir="$TEMP_DIR/.bare" config core.bare true
+
+# 作業ディレクトリを main として移動
+echo -e "${BLUE}  → 作業ディレクトリを main/ に移動中...${NC}"
+mkdir -p "$TEMP_DIR/main"
+
+# ファイルを移動（.bare以外）
+for item in "$TARGET_DIR"/* "$TARGET_DIR"/.[!.]* "$TARGET_DIR"/..?*; do
+    [ -e "$item" ] || continue
+    item_name=$(basename "$item")
+    if [ "$item_name" != ".bare" ]; then
+        mv "$item" "$TEMP_DIR/main/"
+    fi
+done 2>/dev/null || true
+
+# 元のディレクトリを削除して一時ディレクトリをリネーム
+rmdir "$TARGET_DIR"
+mv "$TEMP_DIR" "$TARGET_DIR"
+
+# worktreeとして登録
+echo -e "${BLUE}  → worktreeを登録中...${NC}"
+cd "$TARGET_DIR"
+
+# bareフラグを一時的に解除してworktreeを追加
+git --git-dir=.bare config core.bare false
+
+# main ディレクトリの内容を退避
+MAIN_BACKUP="$TARGET_DIR/main-backup-$$"
+mv "$TARGET_DIR/main" "$MAIN_BACKUP"
+
+# HEADを一時的にdetachしてworktreeを作成できるようにする
+CURRENT_COMMIT=$(git --git-dir=.bare rev-parse HEAD)
+git --git-dir=.bare symbolic-ref HEAD refs/heads/__irie_temp_detach__ 2>/dev/null || true
+echo "$CURRENT_COMMIT" > "$TARGET_DIR/.bare/refs/heads/__irie_temp_detach__"
+
+# worktreeを正式に作成（これでメタデータが正しく生成される）
+# 注: --git-dirを使うと絶対パスになるため、.bare内に移動して実行
+# 注: --relative-paths は必須。絶対パスだとJetBrains IDE + WSL2環境でgit連携が動作しない
+# https://youtrack.jetbrains.com/issue/IJPL-72834
+cd "$TARGET_DIR/.bare"
+git worktree add --relative-paths ../main "$CURRENT_BRANCH"
+cd "$TARGET_DIR"
+
+# 一時ブランチを削除してHEADを復元
+rm -f "$TARGET_DIR/.bare/refs/heads/__irie_temp_detach__"
+git --git-dir=.bare symbolic-ref HEAD "refs/heads/$CURRENT_BRANCH" 2>/dev/null || true
+
+# 退避したファイルを戻す（.gitファイルを除く）
+for item in "$MAIN_BACKUP"/* "$MAIN_BACKUP"/.[!.]* "$MAIN_BACKUP"/..?*; do
+    [ -e "$item" ] || continue
+    item_name=$(basename "$item")
+    if [ "$item_name" != ".git" ]; then
+        # 既存ファイルがあれば上書き
+        rm -rf "$TARGET_DIR/main/$item_name" 2>/dev/null || true
+        mv "$item" "$TARGET_DIR/main/"
+    fi
+done 2>/dev/null || true
+
+# 退避ディレクトリを削除
+rm -rf "$MAIN_BACKUP"
+
+# bareフラグを再設定
+git --git-dir=.bare config core.bare true
+
+# fetch設定を確認・追加
+if ! git --git-dir=.bare config --get remote.origin.fetch &>/dev/null; then
+    git --git-dir=.bare config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+fi
+
+echo ""
+echo -e "${GREEN}=== 変換完了 ===${NC}"
+echo -e "プロジェクト: $TARGET_DIR"
+echo ""
+echo -e "構成:"
+echo -e "  .bare/     Bareリポジトリ"
+echo -e "  main/      $CURRENT_BRANCH ブランチ"
+echo ""
+echo -e "次のステップ:"
+echo -e "  cd $TARGET_DIR/main"
+echo -e "  irie add <branch-name>   # 新しいworktreeを作成"

@@ -1,0 +1,117 @@
+# Docker Compose Override設定のテンプレート（Traefik方式・共有DB）
+#
+# このファイルはサンプルです。プロジェクトのdocker-compose.ymlに合わせて調整してください。
+#
+# プレースホルダー（irie addが自動置換）:
+#   {{DIR_NAME}}    - ディレクトリ名 (例: app1)
+#   {{FQDN}}        - 完全修飾ドメイン名 (例: app1.myproject.localhost)
+#   {{TRAEFIK_ID}}  - Traefikルーター識別子 (例: myproject-app1)
+#   {{DB_NAME}}     - データベース名 (例: myproject_app1)
+#
+# アクセスURL（*.localhostはhosts設定不要）:
+#   アプリ:    http://{{FQDN}}/
+#   アプリ(HTTPS): https://{{FQDN}}:8443/
+#   Vite:      http://vite-{{FQDN}}/
+#   MinIO:     http://minio-{{FQDN}}/
+#   Mailpit:   http://mailpit-{{FQDN}}/
+
+name: myproject-{{DIR_NAME}}
+
+services:
+  # === アプリケーションサービス ===
+  app:
+    # プロジェクト固有のイメージ名に変更してください
+    # image: myproject-app:latest
+    environment:
+      APP_URL: http://{{FQDN}}
+      SANCTUM_STATEFUL_DOMAINS: {{FQDN}}
+      # ViteのURLを指定（Traefik経由）
+      VITE_DEV_SERVER_URL: http://vite-{{FQDN}}
+      # 共有PostgreSQLを使用
+      DB_HOST: shared-postgres
+      # DB_DATABASEは.envで設定（--env=testingで.env.testingを使用するため）
+      # MinIOはコンテナ名で接続
+      AWS_ENDPOINT: http://minio:9000
+    networks:
+      - default
+      - traefik-network
+      - shared-db
+    # 元のdocker-compose.ymlにlinks設定がある場合は無効化
+    # links: !override []
+
+  # === Webサーバー ===
+  nginx:
+    # プロジェクト固有のイメージ名に変更してください
+    # image: myproject-nginx:latest
+    ports: !override []
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      # HTTP
+      - "traefik.http.routers.{{TRAEFIK_ID}}.rule=Host(`{{FQDN}}`)"
+      - "traefik.http.routers.{{TRAEFIK_ID}}.entrypoints=web"
+      # HTTPS
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.rule=Host(`{{FQDN}}`)"
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.entrypoints=websecure"
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.tls=true"
+      # Service
+      - "traefik.http.services.{{TRAEFIK_ID}}.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik-network"
+
+  # === Node/Vite（開発サーバー） ===
+  nodejs:
+    # プロジェクト固有のイメージ名に変更してください
+    # image: myproject-nodejs:latest
+    environment:
+      VITE_PORT: 5173
+      VITE_DEV_SERVER_URL: http://vite-{{FQDN}}
+      APP_URL: http://{{FQDN}}
+    ports: !override []
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vite-{{TRAEFIK_ID}}.rule=Host(`vite-{{FQDN}}`)"
+      - "traefik.http.routers.vite-{{TRAEFIK_ID}}.entrypoints=web"
+      - "traefik.http.services.vite-{{TRAEFIK_ID}}.loadbalancer.server.port=5173"
+      - "traefik.docker.network=traefik-network"
+
+  # === MinIO（S3互換ストレージ） ===
+  minio:
+    ports: !override []
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio-{{TRAEFIK_ID}}.rule=Host(`minio-{{FQDN}}`)"
+      - "traefik.http.routers.minio-{{TRAEFIK_ID}}.entrypoints=web"
+      - "traefik.http.services.minio-{{TRAEFIK_ID}}.loadbalancer.server.port=9090"
+      - "traefik.docker.network=traefik-network"
+
+  # === Mailpit（メールテスト） ===
+  mailpit:
+    ports: !override []
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mailpit-{{TRAEFIK_ID}}.rule=Host(`mailpit-{{FQDN}}`)"
+      - "traefik.http.routers.mailpit-{{TRAEFIK_ID}}.entrypoints=web"
+      - "traefik.http.services.mailpit-{{TRAEFIK_ID}}.loadbalancer.server.port=8025"
+      - "traefik.docker.network=traefik-network"
+
+  # === DB（共有DBを使用するため無効化） ===
+  postgres:
+    profiles:
+      - disabled
+
+networks:
+  traefik-network:
+    external: true
+  shared-db:
+    external: true

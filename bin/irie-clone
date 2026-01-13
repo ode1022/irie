@@ -1,0 +1,157 @@
+#!/bin/bash
+
+# irie clone - Bareリポジトリ構成でクローン
+# 使い方: irie clone <url> [directory]
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${IRIE_DIR}/lib/git-helpers.sh"
+
+show_help() {
+    cat << 'EOF'
+irie clone - Bareリポジトリ構成でクローン
+
+使い方:
+  irie clone <url> [directory]
+
+引数:
+  url         クローンするリポジトリのURL
+  directory   作成するディレクトリ名（省略時はリポジトリ名）
+
+オプション:
+  -b, --branch <branch>   チェックアウトするブランチ（デフォルト: main）
+  --no-main               mainワークツリーを作成しない
+  -h, --help              このヘルプを表示
+
+例:
+  irie clone git@github.com:user/repo.git
+  irie clone git@github.com:user/repo.git my-project
+  irie clone https://github.com/user/repo.git -b develop
+
+作成される構成:
+  my-project/
+  ├── .bare/     # Bareリポジトリ
+  └── main/      # mainブランチのworktree
+EOF
+}
+
+# 引数解析
+URL=""
+DIRECTORY=""
+BRANCH="main"
+CREATE_MAIN=true
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -b|--branch)
+            BRANCH="$2"
+            shift 2
+            ;;
+        --no-main)
+            CREATE_MAIN=false
+            shift
+            ;;
+        -*)
+            echo -e "${RED}エラー: 不明なオプション: $1${NC}"
+            exit 1
+            ;;
+        *)
+            if [ -z "$URL" ]; then
+                URL="$1"
+            elif [ -z "$DIRECTORY" ]; then
+                DIRECTORY="$1"
+            else
+                echo -e "${RED}エラー: 引数が多すぎます${NC}"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# URLは必須
+if [ -z "$URL" ]; then
+    echo -e "${RED}エラー: URLを指定してください${NC}"
+    echo ""
+    show_help
+    exit 1
+fi
+
+# ディレクトリ名を決定
+if [ -z "$DIRECTORY" ]; then
+    # URLからリポジトリ名を抽出
+    DIRECTORY=$(basename "$URL" .git)
+fi
+
+# 既存ディレクトリチェック
+if [ -d "$DIRECTORY" ]; then
+    echo -e "${RED}エラー: ディレクトリが既に存在します: $DIRECTORY${NC}"
+    exit 1
+fi
+
+echo -e "${BLUE}=== irie clone ===${NC}"
+echo -e "URL: $URL"
+echo -e "ディレクトリ: $DIRECTORY"
+echo ""
+
+# ディレクトリ作成
+echo -e "${BLUE}  → ディレクトリを作成中...${NC}"
+mkdir -p "$DIRECTORY"
+cd "$DIRECTORY"
+
+# Bareリポジトリとしてクローン
+echo -e "${BLUE}  → Bareリポジトリをクローン中...${NC}"
+git clone --bare "$URL" .bare
+
+# fetch設定を追加（リモートブランチを正しく取得するため）
+echo -e "${BLUE}  → fetch設定を構成中...${NC}"
+git --git-dir=.bare config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+
+# リモートブランチを取得
+echo -e "${BLUE}  → リモートブランチを取得中...${NC}"
+git --git-dir=.bare fetch origin
+
+# デフォルトブランチを確認
+DEFAULT_BRANCH=$(git --git-dir=.bare symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
+
+# 指定されたブランチが存在するか確認
+if ! git --git-dir=.bare show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
+    echo -e "${YELLOW}  → ブランチ '$BRANCH' が見つかりません。デフォルトブランチ '$DEFAULT_BRANCH' を使用します${NC}"
+    BRANCH="$DEFAULT_BRANCH"
+fi
+
+# mainワークツリーを作成
+if [ "$CREATE_MAIN" = true ]; then
+    echo -e "${BLUE}  → worktree '$BRANCH' を作成中...${NC}"
+
+    # ブランチ名に基づいてworktree名を決定
+    WORKTREE_NAME="$BRANCH"
+    if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+        WORKTREE_NAME="main"
+    fi
+
+    # 注: --relative-paths は必須。絶対パスだとJetBrains IDE + WSL2環境でgit連携が動作しない
+    # https://youtrack.jetbrains.com/issue/IJPL-72834
+    cd .bare
+    git worktree add --relative-paths "../$WORKTREE_NAME" "$BRANCH"
+    cd ..
+fi
+
+echo ""
+echo -e "${GREEN}=== 完了 ===${NC}"
+echo -e "プロジェクト: $(pwd)"
+echo ""
+echo -e "構成:"
+echo -e "  .bare/     Bareリポジトリ"
+if [ "$CREATE_MAIN" = true ]; then
+    echo -e "  $WORKTREE_NAME/      $BRANCH ブランチ"
+fi
+echo ""
+echo -e "次のステップ:"
+echo -e "  cd $DIRECTORY/$WORKTREE_NAME"
+echo -e "  irie add <branch-name>   # 新しいworktreeを作成"

@@ -1,0 +1,460 @@
+#!/bin/bash
+
+# irie shell-init - シェル関数を出力（irie cd対応）
+# 使い方: eval "$(irie shell-init bash)"
+
+set -e
+
+show_help() {
+    cat << 'EOF'
+irie shell-init - シェル統合スクリプト
+
+使い方:
+  irie shell-init [shell]
+
+シェル:
+  (省略)        自動検出（推奨）
+  bash          Bash用シェル関数を出力
+  zsh           Zsh用シェル関数を出力
+
+設定方法:
+  # .bashrc または .zshrc に追加
+  eval "$(irie shell-init)"
+
+機能:
+  - irie cd <name>  指定したworktreeディレクトリに移動
+  - irie cd         fzf/pecoで選択して移動（インストール時）
+  - irie add        worktree作成後、自動的にそのディレクトリに移動
+  - irie remove     worktree削除後、プロジェクトルートに自動移動
+
+fzf/peco連携:
+  fzfまたはpecoがインストールされている場合、引数なしの
+  irie cd で対話的に選択できます。
+
+対応構成:
+  - Bare構成 (.bare フォルダ)
+  - 従来構成 (sibling worktrees)
+EOF
+}
+
+# Bash用シェル関数
+bash_shell_init() {
+    cat << 'BASH_INIT'
+# irie shell integration
+irie() {
+    if [ "$1" = "cd" ]; then
+        shift
+        __irie_cd "$@"
+    elif [ "$1" = "add" ] || [ "$1" = "remove" ]; then
+        # irie add/remove の出力を処理し、自動cdする
+        local output
+        output=$(command irie "$@")
+        echo "$output" | grep -v '^__IRIE_CD__:'
+        local cd_path
+        cd_path=$(echo "$output" | grep '^__IRIE_CD__:' | cut -d: -f2-)
+        if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
+            cd "$cd_path" || return 1
+            echo "移動しました: $cd_path"
+        fi
+    else
+        command irie "$@"
+    fi
+}
+
+# .bare ディレクトリを探す（親方向に探索）
+__irie_find_bare_dir() {
+    local dir="${1:-$(pwd)}"
+    dir=$(cd "$dir" 2>/dev/null && pwd)
+
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.bare" ]; then
+            echo "$dir/.bare"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+# プロジェクトルートを取得
+__irie_find_project_root() {
+    local bare_dir
+    bare_dir=$(__irie_find_bare_dir "$1")
+    if [ -n "$bare_dir" ]; then
+        dirname "$bare_dir"
+    else
+        return 1
+    fi
+}
+
+# Bare構成かどうかを判定
+__irie_is_bare_structure() {
+    local bare_dir
+    bare_dir=$(__irie_find_bare_dir "$1")
+    [ -n "$bare_dir" ]
+}
+
+__irie_cd() {
+    local target="$1"
+
+    if [ -z "$target" ]; then
+        # 引数なしの場合、fzf/pecoで選択
+        local worktrees
+        worktrees=$(__irie_list_worktrees_plain)
+
+        if [ -z "$worktrees" ]; then
+            echo "worktreeが見つかりません"
+            return 1
+        fi
+
+        if command -v fzf &> /dev/null; then
+            target=$(echo "$worktrees" | fzf --prompt="worktree> " --height=40% --reverse)
+        elif command -v peco &> /dev/null; then
+            target=$(echo "$worktrees" | peco --prompt="worktree> ")
+        else
+            echo "使い方: irie cd <worktree名>"
+            echo ""
+            echo "利用可能なworktree:"
+            __irie_list_worktrees
+            echo ""
+            echo "ヒント: fzf または peco をインストールすると対話的に選択できます"
+            return 1
+        fi
+
+        # キャンセルされた場合
+        if [ -z "$target" ]; then
+            return 0
+        fi
+    fi
+
+    local target_dir
+
+    # Bare構成をチェック
+    if __irie_is_bare_structure; then
+        local project_root
+        project_root=$(__irie_find_project_root)
+        target_dir="$project_root/$target"
+    else
+        # 従来構成: 親ディレクトリから探す
+        local parent_dir
+        parent_dir="$(cd .. && pwd)"
+        target_dir="$parent_dir/$target"
+    fi
+
+    if [ -d "$target_dir" ]; then
+        cd "$target_dir" || return 1
+        echo "移動しました: $target_dir"
+    else
+        echo "エラー: worktreeが見つかりません: $target"
+        echo ""
+        echo "利用可能なworktree:"
+        __irie_list_worktrees
+        return 1
+    fi
+}
+
+__irie_list_worktrees() {
+    # Bare構成をチェック
+    if __irie_is_bare_structure; then
+        local bare_dir project_root
+        bare_dir=$(__irie_find_bare_dir)
+        project_root=$(dirname "$bare_dir")
+
+        git --git-dir="$bare_dir" worktree list --porcelain 2>/dev/null | \
+            awk '/^worktree / { path=$2 } /^branch / { gsub(/refs\/heads\//, "", $2); print "  " path " [" $2 "]" }' | \
+            grep -v '\.bare'
+    else
+        local parent_dir
+        parent_dir="$(cd .. 2>/dev/null && pwd)"
+
+        if [ -z "$parent_dir" ]; then
+            echo "  (なし)"
+            return
+        fi
+
+        local found=false
+        for dir in "$parent_dir"/*/; do
+            if [ -d "$dir" ]; then
+                local name
+                name=$(basename "$dir")
+                if [ -f "$dir/.git" ] || [ -d "$dir/.git" ]; then
+                    echo "  $name"
+                    found=true
+                fi
+            fi
+        done
+
+        if [ "$found" = false ]; then
+            echo "  (なし)"
+        fi
+    fi
+}
+
+__irie_list_worktrees_plain() {
+    # Bare構成をチェック
+    if __irie_is_bare_structure; then
+        local bare_dir project_root
+        bare_dir=$(__irie_find_bare_dir)
+        project_root=$(dirname "$bare_dir")
+
+        git --git-dir="$bare_dir" worktree list --porcelain 2>/dev/null | \
+            awk '/^worktree / { print $2 }' | \
+            grep -v '\.bare' | \
+            while read -r path; do
+                basename "$path"
+            done
+    else
+        local parent_dir
+        parent_dir="$(cd .. 2>/dev/null && pwd)"
+
+        if [ -z "$parent_dir" ]; then
+            return
+        fi
+
+        for dir in "$parent_dir"/*/; do
+            if [ -d "$dir" ]; then
+                local name
+                name=$(basename "$dir")
+                if [ -f "$dir/.git" ] || [ -d "$dir/.git" ]; then
+                    echo "$name"
+                fi
+            fi
+        done
+    fi
+}
+BASH_INIT
+}
+
+# Zsh用シェル関数
+zsh_shell_init() {
+    cat << 'ZSH_INIT'
+# irie shell integration
+irie() {
+    if [ "$1" = "cd" ]; then
+        shift
+        __irie_cd "$@"
+    elif [ "$1" = "add" ] || [ "$1" = "remove" ]; then
+        # irie add/remove の出力を処理し、自動cdする
+        local output
+        output=$(command irie "$@")
+        echo "$output" | grep -v '^__IRIE_CD__:'
+        local cd_path
+        cd_path=$(echo "$output" | grep '^__IRIE_CD__:' | cut -d: -f2-)
+        if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
+            cd "$cd_path" || return 1
+            echo "移動しました: $cd_path"
+        fi
+    else
+        command irie "$@"
+    fi
+}
+
+# .bare ディレクトリを探す（親方向に探索）
+__irie_find_bare_dir() {
+    local dir="${1:-$(pwd)}"
+    dir=$(cd "$dir" 2>/dev/null && pwd)
+
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.bare" ]; then
+            echo "$dir/.bare"
+            return 0
+        fi
+        dir=$(dirname "$dir")
+    done
+    return 1
+}
+
+# プロジェクトルートを取得
+__irie_find_project_root() {
+    local bare_dir
+    bare_dir=$(__irie_find_bare_dir "$1")
+    if [ -n "$bare_dir" ]; then
+        dirname "$bare_dir"
+    else
+        return 1
+    fi
+}
+
+# Bare構成かどうかを判定
+__irie_is_bare_structure() {
+    local bare_dir
+    bare_dir=$(__irie_find_bare_dir "$1")
+    [ -n "$bare_dir" ]
+}
+
+__irie_cd() {
+    local target="$1"
+
+    if [ -z "$target" ]; then
+        # 引数なしの場合、fzf/pecoで選択
+        local worktrees
+        worktrees=$(__irie_list_worktrees_plain)
+
+        if [ -z "$worktrees" ]; then
+            echo "worktreeが見つかりません"
+            return 1
+        fi
+
+        if command -v fzf &> /dev/null; then
+            target=$(echo "$worktrees" | fzf --prompt="worktree> " --height=40% --reverse)
+        elif command -v peco &> /dev/null; then
+            target=$(echo "$worktrees" | peco --prompt="worktree> ")
+        else
+            echo "使い方: irie cd <worktree名>"
+            echo ""
+            echo "利用可能なworktree:"
+            __irie_list_worktrees
+            echo ""
+            echo "ヒント: fzf または peco をインストールすると対話的に選択できます"
+            return 1
+        fi
+
+        # キャンセルされた場合
+        if [ -z "$target" ]; then
+            return 0
+        fi
+    fi
+
+    local target_dir
+
+    # Bare構成をチェック
+    if __irie_is_bare_structure; then
+        local project_root
+        project_root=$(__irie_find_project_root)
+        target_dir="$project_root/$target"
+    else
+        # 従来構成: 親ディレクトリから探す
+        local parent_dir
+        parent_dir="$(cd .. && pwd)"
+        target_dir="$parent_dir/$target"
+    fi
+
+    if [ -d "$target_dir" ]; then
+        cd "$target_dir" || return 1
+        echo "移動しました: $target_dir"
+    else
+        echo "エラー: worktreeが見つかりません: $target"
+        echo ""
+        echo "利用可能なworktree:"
+        __irie_list_worktrees
+        return 1
+    fi
+}
+
+__irie_list_worktrees() {
+    # Bare構成をチェック
+    if __irie_is_bare_structure; then
+        local bare_dir project_root
+        bare_dir=$(__irie_find_bare_dir)
+        project_root=$(dirname "$bare_dir")
+
+        git --git-dir="$bare_dir" worktree list --porcelain 2>/dev/null | \
+            awk '/^worktree / { path=$2 } /^branch / { gsub(/refs\/heads\//, "", $2); print "  " path " [" $2 "]" }' | \
+            grep -v '\.bare'
+    else
+        local parent_dir
+        parent_dir="$(cd .. 2>/dev/null && pwd)"
+
+        if [ -z "$parent_dir" ]; then
+            echo "  (なし)"
+            return
+        fi
+
+        local found=false
+        local name
+        for dir in "$parent_dir"/*/; do
+            if [ -d "$dir" ]; then
+                name="${dir%/}"
+                name="${name##*/}"
+                if [ -f "$dir/.git" ] || [ -d "$dir/.git" ]; then
+                    echo "  $name"
+                    found=true
+                fi
+            fi
+        done
+
+        if [ "$found" = false ]; then
+            echo "  (なし)"
+        fi
+    fi
+}
+
+__irie_list_worktrees_plain() {
+    # Bare構成をチェック
+    if __irie_is_bare_structure; then
+        local bare_dir project_root
+        bare_dir=$(__irie_find_bare_dir)
+        project_root=$(dirname "$bare_dir")
+
+        git --git-dir="$bare_dir" worktree list --porcelain 2>/dev/null | \
+            awk '/^worktree / { n=split($2, a, "/"); print a[n] }' | \
+            grep -v '\.bare'
+    else
+        local parent_dir name
+        parent_dir="$(cd .. 2>/dev/null && pwd)"
+
+        if [ -z "$parent_dir" ]; then
+            return
+        fi
+
+        for dir in "$parent_dir"/*/; do
+            if [ -d "$dir" ]; then
+                name="${dir%/}"
+                name="${name##*/}"
+                if [ -f "$dir/.git" ] || [ -d "$dir/.git" ]; then
+                    echo "$name"
+                fi
+            fi
+        done
+    fi
+}
+ZSH_INIT
+}
+
+# 親プロセス（呼び出し元シェル）を検出
+detect_parent_shell() {
+    local parent_cmd
+    parent_cmd=$(ps -p "$PPID" -o comm= 2>/dev/null | tr -d ' ')
+
+    case "$parent_cmd" in
+        *zsh*)
+            echo "zsh"
+            ;;
+        *bash*)
+            echo "bash"
+            ;;
+        *)
+            # フォールバック: $SHELLから推測
+            basename "$SHELL"
+            ;;
+    esac
+}
+
+# メイン処理
+case "${1:-}" in
+    bash)
+        bash_shell_init
+        ;;
+    zsh)
+        zsh_shell_init
+        ;;
+    -h|--help|help)
+        show_help
+        ;;
+    "")
+        # シェルを自動検出
+        case "$(detect_parent_shell)" in
+            zsh)
+                zsh_shell_init
+                ;;
+            *)
+                bash_shell_init
+                ;;
+        esac
+        ;;
+    *)
+        echo "エラー: 不明なシェル: $1"
+        echo "使い方: irie shell-init [bash|zsh]"
+        exit 1
+        ;;
+esac

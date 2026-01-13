@@ -1,0 +1,458 @@
+#!/bin/bash
+
+# irie completion - シェル補完スクリプト生成・インストール
+
+# カラー出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+show_help() {
+    cat << 'EOF'
+irie completion - シェル補完スクリプト
+
+使い方:
+  irie completion <command>
+
+コマンド:
+  bash        Bash用補完スクリプトを出力
+  zsh         Zsh用補完スクリプトを出力
+  install     補完スクリプトをインストール（自動検出）
+  uninstall   補完スクリプトをアンインストール
+
+設定方法（手動）:
+  # bashの場合（.bashrcに追加）
+  eval "$(irie completion bash)"
+
+  # zshの場合（.zshrcに追加）
+  eval "$(irie completion zsh)"
+
+自動インストール:
+  irie completion install
+EOF
+}
+
+# ユーザーのログインシェルを検出
+detect_shell() {
+    # $SHELLはユーザーのログインシェル（実行環境ではなく設定されたシェル）
+    if [ -n "$SHELL" ]; then
+        basename "$SHELL"
+    elif [ -n "$ZSH_VERSION" ]; then
+        echo "zsh"
+    elif [ -n "$BASH_VERSION" ]; then
+        echo "bash"
+    else
+        echo "unknown"
+    fi
+}
+
+# Bash補完スクリプト
+bash_completion() {
+    cat << 'BASH_COMPLETION'
+_irie_completions() {
+    local cur prev words cword
+    _init_completion || return
+
+    local commands="clone convert add remove list status cd open info config init update override shell-init completion help version"
+    local add_opts="--base --root --separate-db --help"
+
+    # プロジェクトルートを探す関数
+    _irie_find_project_root() {
+        local dir="$PWD"
+        while [ "$dir" != "/" ]; do
+            if [ -d "$dir/.bare" ]; then
+                echo "$dir"
+                return 0
+            fi
+            dir=$(dirname "$dir")
+        done
+        return 1
+    }
+
+    # worktree一覧を取得する関数
+    _irie_get_worktrees() {
+        local project_root
+        project_root=$(_irie_find_project_root) || return
+        for d in "$project_root"/*/; do
+            [ -d "$d" ] || continue
+            local name=$(basename "$d")
+            [ "$name" = ".bare" ] && continue
+            echo "$name"
+        done
+    }
+
+    case "${cword}" in
+        1)
+            COMPREPLY=($(compgen -W "${commands}" -- "${cur}"))
+            ;;
+        2)
+            case "${prev}" in
+                clone)
+                    # URL補完は難しいのでオプションのみ
+                    local clone_opts="-b --branch --no-main --help"
+                    COMPREPLY=($(compgen -W "${clone_opts}" -- "${cur}"))
+                    ;;
+                convert)
+                    local convert_opts="--dry-run --help"
+                    COMPREPLY=($(compgen -W "${convert_opts}" -- "${cur}"))
+                    ;;
+                add)
+                    # ブランチ名またはオプション
+                    COMPREPLY=($(compgen -W "${add_opts}" -- "${cur}"))
+                    ;;
+                remove|info|cd|open)
+                    # 既存のworktreeディレクトリを補完
+                    local worktrees
+                    worktrees=$(_irie_get_worktrees)
+                    COMPREPLY=($(compgen -W "${worktrees}" -- "${cur}"))
+                    ;;
+                list)
+                    COMPREPLY=($(compgen -W "--path --name --help" -- "${cur}"))
+                    ;;
+                status)
+                    COMPREPLY=($(compgen -W "--verbose --help" -- "${cur}"))
+                    ;;
+                shell-init)
+                    COMPREPLY=($(compgen -W "bash zsh" -- "${cur}"))
+                    ;;
+                completion)
+                    COMPREPLY=($(compgen -W "bash zsh install uninstall" -- "${cur}"))
+                    ;;
+                config)
+                    COMPREPLY=($(compgen -W "--list --path --unset editor --help" -- "${cur}"))
+                    ;;
+                open)
+                    local open_opts="--editor --list --setup --help"
+                    COMPREPLY=($(compgen -W "${open_opts}" -- "${cur}"))
+                    ;;
+                override)
+                    COMPREPLY=($(compgen -W "traefik" -- "${cur}"))
+                    ;;
+            esac
+            ;;
+        *)
+            case "${words[1]}" in
+                add)
+                    COMPREPLY=($(compgen -W "${add_opts}" -- "${cur}"))
+                    ;;
+                remove)
+                    local remove_opts="--force --help"
+                    COMPREPLY=($(compgen -W "${remove_opts}" -- "${cur}"))
+                    ;;
+                init)
+                    local init_opts="--dry-run --help"
+                    COMPREPLY=($(compgen -W "${init_opts}" -- "${cur}"))
+                    ;;
+                override)
+                    local override_opts="--setup --help"
+                    COMPREPLY=($(compgen -W "${override_opts}" -- "${cur}"))
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _irie_completions irie
+BASH_COMPLETION
+}
+
+# Zsh補完スクリプト
+zsh_completion() {
+    cat << 'ZSH_COMPLETION'
+#compdef irie
+
+_irie() {
+    local -a commands
+    commands=(
+        'clone:Bareリポジトリ構成でクローン'
+        'convert:既存リポジトリをBare構成に変換'
+        'add:worktree作成（Traefik + 共有DB方式）'
+        'remove:worktree削除'
+        'list:worktree一覧表示'
+        'status:各worktreeのgit状態を表示'
+        'cd:worktreeディレクトリに移動'
+        'open:worktreeをエディタで開く'
+        'info:worktree情報表示'
+        'config:設定の表示・変更'
+        'init:Claude Codeでプロジェクト用テンプレートを生成'
+        'update:irieを最新版に更新'
+        'override:docker-compose.override.ymlを生成'
+        'shell-init:シェル統合スクリプトを出力'
+        'completion:シェル補完スクリプト'
+        'help:ヘルプを表示'
+        'version:バージョンを表示'
+    )
+
+    local -a completion_subcommands
+    completion_subcommands=(
+        'bash:Bash用補完スクリプトを出力'
+        'zsh:Zsh用補完スクリプトを出力'
+        'install:補完スクリプトをインストール'
+        'uninstall:補完スクリプトをアンインストール'
+    )
+
+    # プロジェクトルートを探してworktree一覧を取得
+    _irie_get_worktrees() {
+        local dir="$PWD" project_root=""
+        while [[ "$dir" != "/" ]]; do
+            if [[ -d "$dir/.bare" ]]; then
+                project_root="$dir"
+                break
+            fi
+            dir=$(dirname "$dir")
+        done
+        [[ -z "$project_root" ]] && return
+        for d in "$project_root"/*/; do
+            [[ -d "$d" ]] || continue
+            local name=$(basename "$d")
+            [[ "$name" == ".bare" ]] && continue
+            echo "$name"
+        done
+    }
+
+    _arguments -C \
+        '1: :->command' \
+        '*: :->args'
+
+    case "$state" in
+        command)
+            _describe -t commands 'irie commands' commands
+            ;;
+        args)
+            case "${words[2]}" in
+                clone)
+                    _arguments \
+                        '1:repository URL:' \
+                        '2:directory name:' \
+                        '-b[チェックアウトするブランチ]:branch:' \
+                        '--branch[チェックアウトするブランチ]:branch:' \
+                        '--no-main[mainワークツリーを作成しない]' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                convert)
+                    _arguments \
+                        '1:directory:_files -/' \
+                        '--dry-run[実行せずに変換内容を表示]' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                add)
+                    _arguments \
+                        '1:branch name:' \
+                        '--base[ベースブランチを指定]:branch:' \
+                        '--root[ルートドメインで作成]' \
+                        '--separate-db[専用DBを使用（マイグレーション実行）]' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                remove)
+                    if (( CURRENT == 3 )); then
+                        local -a worktrees
+                        worktrees=(${(f)"$(_irie_get_worktrees)"})
+                        _describe -t worktrees 'worktree directories' worktrees
+                    else
+                        _arguments \
+                            '--force[確認なしで削除]' \
+                            '--help[ヘルプを表示]'
+                    fi
+                    ;;
+                info)
+                    if (( CURRENT == 3 )); then
+                        local -a worktrees
+                        worktrees=(${(f)"$(_irie_get_worktrees)"})
+                        _describe -t worktrees 'worktree directories' worktrees
+                    fi
+                    ;;
+                cd)
+                    if (( CURRENT == 3 )); then
+                        local -a worktrees
+                        worktrees=(${(f)"$(_irie_get_worktrees)"})
+                        _describe -t worktrees 'worktree directories' worktrees
+                    fi
+                    ;;
+                open)
+                    if (( CURRENT == 3 )); then
+                        local -a worktrees
+                        worktrees=(${(f)"$(_irie_get_worktrees)"})
+                        _describe -t worktrees 'worktree directories' worktrees
+                    else
+                        _arguments \
+                            '--editor[使用するエディタのパス]:editor path:_files' \
+                            '--list[利用可能なworktree一覧を表示]' \
+                            '--setup[エディタ設定を再実行]' \
+                            '--help[ヘルプを表示]'
+                    fi
+                    ;;
+                config)
+                    _arguments \
+                        '1:config key:(editor)' \
+                        '2:config value:' \
+                        '--list[全設定を表示]' \
+                        '-l[全設定を表示]' \
+                        '--path[設定ファイルのパスを表示]' \
+                        '--unset[設定を削除]:key:(editor)' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                list)
+                    _arguments \
+                        '-p[パスのみ表示]' \
+                        '--path[パスのみ表示]' \
+                        '-n[名前のみ表示]' \
+                        '--name[名前のみ表示]' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                status)
+                    _arguments \
+                        '-v[詳細表示]' \
+                        '--verbose[詳細表示]' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                shell-init)
+                    if (( CURRENT == 3 )); then
+                        local shells
+                        shells=('bash:Bash用シェル関数' 'zsh:Zsh用シェル関数')
+                        _describe -t shells 'shells' shells
+                    fi
+                    ;;
+                completion)
+                    if (( CURRENT == 3 )); then
+                        _describe -t completion_subcommands 'completion subcommands' completion_subcommands
+                    fi
+                    ;;
+                init)
+                    _arguments \
+                        '--dry-run[プロンプトを表示するだけ]' \
+                        '--help[ヘルプを表示]'
+                    ;;
+                override)
+                    if (( CURRENT == 3 )); then
+                        local modes
+                        modes=('traefik:Traefik方式のoverride.ymlを生成')
+                        _describe -t modes 'modes' modes
+                    else
+                        _arguments \
+                            '--setup[生成後にコンテナ起動とpost-setup.shを実行]' \
+                            '--help[ヘルプを表示]'
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_irie "$@"
+ZSH_COMPLETION
+}
+
+# 補完スクリプトのインストール
+install_completion() {
+    local shell_type=$(detect_shell)
+    local installed=false
+
+    echo -e "${BLUE}補完スクリプトをインストールしています...${NC}"
+    echo -e "検出されたシェル: ${shell_type}"
+
+    # Zsh補完のインストール（zshユーザーの場合は優先）
+    if [ "$shell_type" = "zsh" ]; then
+        local zsh_completion_dir="$HOME/.zsh/completions"
+        mkdir -p "$zsh_completion_dir"
+        zsh_completion > "$zsh_completion_dir/_irie"
+        echo -e "${GREEN}✓${NC} Zsh補完をインストールしました: $zsh_completion_dir/_irie"
+
+        # fpathに追加が必要かチェック
+        if ! grep -q 'fpath=.*\.zsh/completions' "$HOME/.zshrc" 2>/dev/null; then
+            echo ""
+            echo -e "${YELLOW}注意:${NC} Zshで補完を有効にするには、.zshrcに以下を追加してください："
+            echo ""
+            echo '  fpath=(~/.zsh/completions $fpath)'
+            echo '  autoload -Uz compinit && compinit'
+        fi
+        installed=true
+    fi
+
+    # Bash補完のインストール（bashユーザーまたはbash-completionディレクトリが存在する場合）
+    if [ "$shell_type" = "bash" ] || [ -d "$HOME/.local/share/bash-completion" ]; then
+        local bash_completion_dir="$HOME/.local/share/bash-completion/completions"
+        mkdir -p "$bash_completion_dir"
+        bash_completion > "$bash_completion_dir/irie"
+        echo -e "${GREEN}✓${NC} Bash補完をインストールしました: $bash_completion_dir/irie"
+        installed=true
+    fi
+
+    if [ "$installed" = false ]; then
+        echo -e "${YELLOW}補完ディレクトリが見つかりませんでした${NC}"
+        echo "手動でインストールする場合:"
+        echo "  irie completion bash > ~/.local/share/bash-completion/completions/irie"
+        echo "  irie completion zsh > ~/.zsh/completions/_irie"
+    fi
+
+    echo ""
+    echo -e "${GREEN}完了！${NC} 新しいターミナルを開くと補完が有効になります。"
+}
+
+# 補完スクリプトのアンインストール
+uninstall_completion() {
+    echo -e "${BLUE}補完スクリプトをアンインストールしています...${NC}"
+
+    local bash_file="$HOME/.local/share/bash-completion/completions/irie"
+    if [ -f "$bash_file" ]; then
+        rm "$bash_file"
+        echo -e "${GREEN}✓${NC} Bash補完を削除しました: $bash_file"
+    fi
+
+    local zsh_file="$HOME/.zsh/completions/_irie"
+    if [ -f "$zsh_file" ]; then
+        rm "$zsh_file"
+        echo -e "${GREEN}✓${NC} Zsh補完を削除しました: $zsh_file"
+    fi
+
+    echo -e "${GREEN}完了！${NC}"
+}
+
+# 補完インストールの確認（Y/N）
+confirm_install_completion() {
+    echo ""
+    echo -ne "${BLUE}シェル補完をインストールしますか？ [y/N]: ${NC}"
+    read -r response
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            install_completion
+            return 0
+            ;;
+        *)
+            echo "補完のインストールをスキップしました。"
+            echo "後からインストールする場合: irie completion install"
+            return 1
+            ;;
+    esac
+}
+
+# メイン処理
+case "${1:-}" in
+    bash)
+        bash_completion
+        ;;
+    zsh)
+        zsh_completion
+        ;;
+    install)
+        install_completion
+        ;;
+    uninstall)
+        uninstall_completion
+        ;;
+    --confirm)
+        # irie initから呼ばれる確認付きインストール
+        confirm_install_completion
+        ;;
+    -h|--help|help|"")
+        show_help
+        ;;
+    *)
+        echo "エラー: 不明なコマンド: $1"
+        echo "使い方: irie completion [bash|zsh|install|uninstall]"
+        exit 1
+        ;;
+esac

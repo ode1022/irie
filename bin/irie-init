@@ -1,0 +1,130 @@
+#!/bin/bash
+
+# irie init - Claude Codeでプロジェクト用テンプレートを生成
+# claude コマンドを起動してプロンプトを投げる
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROMPT_FILE="$IRIE_DIR/project-templates/prompts/generate-worktree-config.md"
+
+# カラー出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# ヘルプ表示
+show_help() {
+    cat << 'EOF'
+irie init - Claude Codeでプロジェクト用テンプレートを生成
+
+使い方:
+  irie init [options]
+
+オプション:
+  -d, --dir <path>    プロジェクトディレクトリ（デフォルト: カレント）
+  --dry-run           プロンプトを表示するだけ（Claude Codeを起動しない）
+  -h, --help          このヘルプを表示
+
+説明:
+  Claude Codeを起動し、docker-compose.ymlを解析して
+  irie用のworktreeテンプレートを生成します。
+
+  プロンプトはirie側で管理されているため、常に最新版が使用されます。
+
+サンプルテンプレート:
+  ~/.irie/project-templates/examples/
+EOF
+}
+
+# 引数解析
+PROJECT_DIR="."
+DRY_RUN=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--dir)
+            PROJECT_DIR="$2"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}エラー: 不明なオプション: $1${NC}"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# プロジェクトディレクトリに移動
+cd "$PROJECT_DIR"
+
+# gitリポジトリか確認
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo -e "${RED}エラー: gitリポジトリではありません${NC}"
+    exit 1
+fi
+
+# Claude Codeがインストールされているか確認
+if ! command -v claude &> /dev/null; then
+    echo -e "${RED}エラー: Claude Code (claude コマンド) がインストールされていません${NC}"
+    echo ""
+    echo "インストール方法: https://docs.anthropic.com/claude-code"
+    exit 1
+fi
+
+# docker-compose.yml/yaml の存在確認
+COMPOSE_FILE=""
+if [ -f "docker-compose.yml" ]; then
+    COMPOSE_FILE="docker-compose.yml"
+elif [ -f "docker-compose.yaml" ]; then
+    COMPOSE_FILE="docker-compose.yaml"
+else
+    echo -e "${RED}エラー: docker-compose.yml/yaml が見つかりません${NC}"
+    exit 1
+fi
+
+PROJECT_NAME=$(basename "$(git rev-parse --show-toplevel)")
+
+echo -e "${BLUE}プロジェクト: $PROJECT_NAME${NC}"
+echo -e "${BLUE}docker-compose: $COMPOSE_FILE${NC}"
+
+# 補完がインストールされていなければ確認
+BASH_COMPLETION="$HOME/.local/share/bash-completion/completions/irie"
+ZSH_COMPLETION="$HOME/.zsh/completions/_irie"
+if [ ! -f "$BASH_COMPLETION" ] && [ ! -f "$ZSH_COMPLETION" ]; then
+    "$IRIE_DIR/bin/irie-completion" --confirm
+fi
+
+echo ""
+
+# プロンプトファイルの存在確認
+if [ ! -f "$PROMPT_FILE" ]; then
+    echo -e "${RED}エラー: プロンプトファイルが見つかりません: $PROMPT_FILE${NC}"
+    exit 1
+fi
+
+# プロンプトを読み込み
+PROMPT=$(cat "$PROMPT_FILE")
+
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}=== プロンプト内容（dry-run） ===${NC}"
+    echo ""
+    echo "$PROMPT"
+    exit 0
+fi
+
+echo -e "${GREEN}Claude Codeを起動します...${NC}"
+echo ""
+
+# Claude Codeを起動してプロンプトを投げる
+claude "$PROMPT"

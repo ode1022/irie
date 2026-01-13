@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# irie config - 設定管理コマンド
+# 設定ファイル: ~/.config/irie/config
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${IRIE_DIR}/lib/config.sh"
+
+# カラー出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+show_help() {
+    cat << 'EOF'
+irie config - 設定管理
+
+使い方:
+  irie config [key] [value]
+  irie config [options]
+
+コマンド:
+  irie config                 全設定を表示
+  irie config <key>           設定値を取得
+  irie config <key> <value>   設定値を保存
+  irie config --unset <key>   設定を削除
+
+オプション:
+  --list, -l      全設定を表示
+  --path          設定ファイルのパスを表示
+  --unset <key>   設定を削除
+  -h, --help      このヘルプを表示
+
+設定項目:
+  editor          エディタのパス（irie open で使用）
+
+例:
+  irie config --list                              # 全設定を表示
+  irie config editor                              # エディタ設定を取得
+  irie config editor "/path/to/editor"            # エディタを設定
+  irie config --unset editor                      # エディタ設定を削除
+  irie config --path                              # 設定ファイルのパスを表示
+
+設定ファイル:
+  ~/.config/irie/config（XDG準拠）
+EOF
+}
+
+# メイン処理
+main() {
+    case "${1:-}" in
+        -h|--help|help)
+            show_help
+            exit 0
+            ;;
+        --list|-l|"")
+            echo -e "${BLUE}設定ファイル:${NC} $(config_path)"
+            echo ""
+            if [ -f "$(config_path)" ]; then
+                echo -e "${BLUE}現在の設定:${NC}"
+                while IFS='=' read -r key value; do
+                    [ -z "$key" ] && continue
+                    echo "  $key = $value"
+                done < "$(config_path)"
+            else
+                echo -e "${YELLOW}設定ファイルがありません${NC}"
+            fi
+            ;;
+        --path)
+            config_path
+            ;;
+        --unset)
+            if [ -z "${2:-}" ]; then
+                echo -e "${RED}エラー: キーを指定してください${NC}"
+                echo "使い方: irie config --unset <key>"
+                exit 1
+            fi
+            unset_config "$2"
+            echo -e "${GREEN}✓${NC} 設定を削除しました: $2"
+            ;;
+        *)
+            local key="$1"
+            local value="${2:-}"
+
+            if [ -z "$value" ]; then
+                # 値を取得
+                local current
+                current=$(get_config "$key" "")
+                if [ -n "$current" ]; then
+                    echo "$current"
+                else
+                    echo -e "${YELLOW}設定されていません: $key${NC}" >&2
+                    exit 1
+                fi
+            else
+                # 値を設定
+                set_config "$key" "$value"
+                echo -e "${GREEN}✓${NC} 設定を保存しました: $key = $value"
+            fi
+            ;;
+    esac
+}
+
+main "$@"

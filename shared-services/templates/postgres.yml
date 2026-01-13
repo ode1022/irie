@@ -1,0 +1,72 @@
+# 共有PostgreSQLサービス
+# 複数worktreeで共有するPostgreSQLコンテナ
+#
+# 使用方法:
+#   cd ~/.irie/shared-services
+#   cp templates/postgres.yml .
+#   docker compose -f postgres.yml up -d
+#
+# 各worktreeはプロジェクト名とブランチ名に基づいたDB名を使用:
+#   - myproject_main
+#   - myproject_feature_xxx
+#
+# DB GUIツールの接続設定:
+#   Host: 127.0.0.1
+#   Port: 5432
+#   User: root
+#   Password: root
+#
+# 複数バージョンを同時に使う場合:
+#   postgres15.yml, postgres16.yml のように別ファイルを作成し、
+#   ポートとコンテナ名を変更してください:
+#     - ports: "127.0.0.1:5433:5432"  # 5433, 5434, ...
+#     - container_name: shared-postgres-16
+#   プロジェクトのoverride.ymlでDB_PORTも合わせて変更してください。
+#
+# PostGISイメージ:
+#   - Linux/WSL2: postgis/postgis:15-3.5
+#   - macOS (Apple Silicon): ghcr.io/baosystems/postgis:15-3.5
+#     ※公式postgis/postgisはARM64未対応のため代替イメージを使用
+#     ※公式対応後は postgis/postgis に変更可能
+#     https://github.com/postgis/docker-postgis/issues/216
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: shared-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # 並列テスト向けチューニング
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=300"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "synchronous_commit=off"
+      - "-c"
+      - "fsync=off"
+      - "-c"
+      - "full_page_writes=off"
+    networks:
+      shared-db:
+        aliases:
+          - shared-postgres
+
+networks:
+  shared-db:
+    name: shared-db
+    driver: bridge
+
+volumes:
+  postgres-data:

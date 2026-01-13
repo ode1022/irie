@@ -1,0 +1,9 @@
+# テンプレートからコピーされた実際の定義ファイル
+*.yml
+!templates/*.yml
+
+# Traefik関連（自動生成）
+traefik/
+
+# 開発者が追加したカスタム定義
+# （templates/ 以外の .yml ファイルは全てignore）

@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_macos:
+        description: 'Run macOS tests'
+        type: boolean
+        default: true
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install BATS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Start shared services
+        run: |
+          cd shared-services
+          cp templates/postgres.yml .
+          cp templates/traefik.yml .
+          docker compose -f postgres.yml -f traefik.yml up -d
+          until docker exec shared-postgres pg_isready -U root; do sleep 1; done
+
+      - name: Run all tests
+        run: bats tests/
+
+  test-macos:
+    # 手動実行時のみ（workflow_dispatch）
+    if: github.event_name == 'workflow_dispatch' && inputs.run_macos
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+            /opt/homebrew/Cellar/bats-core
+          key: homebrew-${{ runner.os }}-bats-v2
+          restore-keys: |
+            homebrew-${{ runner.os }}-
+          save-always: true
+
+      - name: Setup Docker
+        uses: douglascamata/setup-docker-macos-action@v1
+
+      - name: Install BATS
+        run: |
+          # キャッシュがある場合はスキップ
+          brew list bats-core &>/dev/null || brew install bats-core
+
+      - name: Start shared services
+        run: |
+          cd shared-services
+          cp templates/postgres.yml .
+          cp templates/traefik.yml .
+          # macOS CI環境（Colima）では127.0.0.1バインドが動作しないため0.0.0.0に変更
+          sed -i '' 's/127\.0\.0\.1:/0.0.0.0:/g' traefik.yml postgres.yml
+          docker compose -f postgres.yml -f traefik.yml up -d
+          until docker exec shared-postgres pg_isready -U root; do sleep 1; done
+
+      - name: Wait for Traefik to be ready
+        run: |
+          # TraefikのダッシュボードAPIが応答するまで待機
+          echo "Waiting for Traefik to be ready..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8080/api/version > /dev/null 2>&1; then
+              echo "Traefik is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+          # デバッグ情報
+          echo "=== Docker containers ==="
+          docker ps
+          echo "=== Traefik API version ==="
+          curl -s http://localhost:8080/api/version || echo "Traefik API not responding"
+          echo "=== Network test ==="
+          curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" http://localhost:80 || echo "Port 80 not responding"
+
+      - name: Run all tests
+        run: PATH="$(brew --prefix)/bin:$PATH" bats tests/

@@ -1,0 +1,52 @@
+# 共有MySQLサービス
+# 複数worktreeで共有するMySQLコンテナ
+#
+# 使用方法:
+#   cd ~/.irie/shared-services
+#   cp templates/mysql.yml .
+#   docker compose -f mysql.yml up -d
+#
+# 各worktreeはプロジェクト名とブランチ名に基づいたDB名を使用:
+#   - myproject_main
+#   - myproject_feature_xxx
+#
+# DB GUIツールの接続設定:
+#   Host: 127.0.0.1
+#   Port: 3306
+#   User: root
+#   Password: root
+#
+# 複数バージョンを同時に使う場合:
+#   mysql8.yml, mysql57.yml のように別ファイルを作成し、
+#   ポートとコンテナ名を変更してください:
+#     - ports: "127.0.0.1:3307:3306"  # 3307, 3308, ...
+#     - container_name: shared-mysql-57
+#   プロジェクトのoverride.ymlでDB_PORTも合わせて変更してください。
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: shared-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    networks:
+      shared-db:
+        aliases:
+          - shared-mysql
+
+networks:
+  shared-db:
+    name: shared-db
+    driver: bridge
+
+volumes:
+  mysql-data:

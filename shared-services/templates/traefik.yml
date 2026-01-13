@@ -1,0 +1,73 @@
+# Traefik リバースプロキシ
+# 複数worktreeでホスト名ベースのルーティングを提供
+#
+# 使用方法:
+#   setup_worktree_traefik.sh が自動的に起動します
+#   （証明書も初回起動時に自動生成されます）
+#
+#   手動で起動する場合:
+#   cd ~/.irie/shared-services
+#   ./generate-certs.sh && docker-compose -f traefik.yml up -d
+#
+# ダッシュボード:
+#   http://localhost:8080/
+#   http://traefik.localhost/
+#
+# 各worktreeのコンテナは traefik-network に接続することで
+# 自動的にTraefik経由でアクセス可能になります
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: shared-traefik
+    restart: unless-stopped
+    command:
+      # API とダッシュボードを有効化
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+
+      # Dockerプロバイダーを有効化
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik-network"
+
+      # エントリーポイント設定
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+      # ログレベル
+      - "--log.level=INFO"
+
+      # TLS設定（動的設定ファイル）
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+
+    ports:
+      - "127.0.0.1:80:80"      # HTTP（127.0.0.1にバインドしてLoopback方式と共存）
+      - "127.0.0.1:8443:443"   # HTTPS（443はWindowsで予約されている場合があるため8443を使用）
+      - "127.0.0.1:8080:8080"  # Traefik Dashboard
+
+    volumes:
+      # Docker Socket（コンテナ検出用）
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # TLS動的設定
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+
+      # TLS証明書
+      - ./traefik/certs:/etc/traefik/certs:ro
+
+    networks:
+      - traefik-network
+
+    labels:
+      - "traefik.enable=true"
+      # ダッシュボード用ルーティング
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+
+networks:
+  traefik-network:
+    name: traefik-network
+    driver: bridge

@@ -1,0 +1,345 @@
+#!/bin/bash
+
+# irie open - worktreeをエディタで開く
+# 対応プラットフォーム: WSL, Linux, macOS
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${IRIE_DIR}/lib/git-helpers.sh"
+source "${IRIE_DIR}/lib/config.sh"
+source "${IRIE_DIR}/lib/editors.sh"
+
+show_help() {
+    cat << 'EOF'
+irie open - worktreeをエディタで開く
+
+使い方:
+  irie open [worktree名] [options]
+
+引数:
+  worktree名    開くworktree（省略時は現在のディレクトリ）
+
+オプション:
+  --editor <path>   使用するエディタのパス（一時的に指定）
+  --list            利用可能なworktree一覧を表示
+  --setup           エディタ設定を再実行
+  -h, --help        このヘルプを表示
+
+設定:
+  初回実行時にインストール済みエディタを検出し、選択したエディタを保存します。
+  設定ファイル: ~/.config/irie/config
+
+  設定の変更:
+    irie open --setup         # エディタを再選択
+    irie config editor <path> # エディタパスを直接指定
+    irie config --list        # 現在の設定を表示
+
+例:
+  irie open                      # 現在のworktreeを開く
+  irie open main                 # mainワークツリーを開く
+  irie open feat/new-feature     # 指定ワークツリーを開く
+  irie open --setup              # エディタを再設定
+EOF
+}
+
+# worktree一覧を表示（開く用）
+list_worktrees_for_open() {
+    if is_bare_structure; then
+        list_worktree_names
+    else
+        local parent_dir
+        parent_dir="$(cd .. 2>/dev/null && pwd)"
+        if [ -n "$parent_dir" ]; then
+            for dir in "$parent_dir"/*/; do
+                if [ -d "$dir" ]; then
+                    if [ -f "$dir/.git" ] || [ -d "$dir/.git" ]; then
+                        basename "$dir"
+                    fi
+                fi
+            done
+        fi
+    fi
+}
+
+# worktreeのパスを取得
+get_worktree_path() {
+    local name="$1"
+
+    if is_bare_structure; then
+        local project_root
+        project_root=$(find_project_root)
+        local target="$project_root/$name"
+        if [ -d "$target" ]; then
+            echo "$target"
+            return 0
+        fi
+    else
+        local parent_dir
+        parent_dir="$(cd .. 2>/dev/null && pwd)"
+        local target="$parent_dir/$name"
+        if [ -d "$target" ]; then
+            echo "$target"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# エディタ選択のインタラクティブUI
+select_editor_interactive() {
+    local editors=()
+    local names=()
+    local paths=()
+    local i=1
+
+    echo ""
+    echo -e "${BLUE}インストール済みエディタを検出中...${NC}"
+    echo ""
+
+    while IFS=: read -r id name path; do
+        editors+=("$id")
+        names+=("$name")
+        paths+=("$path")
+        echo "  $i) $name"
+        echo "     $path"
+        echo ""
+        ((i++))
+    done < <(detect_installed_editors)
+
+    if [ ${#editors[@]} -eq 0 ]; then
+        echo -e "${YELLOW}エディタが検出されませんでした${NC}"
+        echo ""
+        echo "手動で設定する場合:"
+        echo "  irie config editor /path/to/editor"
+        return 1
+    fi
+
+    # 「その他」オプションを追加
+    echo "  $i) その他（パスを入力）"
+    echo ""
+
+    local choice
+    echo -ne "${BLUE}使用するエディタを選択してください [1-$i]: ${NC}"
+    read -r choice
+
+    # 入力検証
+    if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}エラー: 数字を入力してください${NC}"
+        return 1
+    fi
+
+    if [ "$choice" -eq "$i" ]; then
+        # その他を選択（フルパスで保存）
+        echo -ne "${BLUE}エディタのパスを入力: ${NC}"
+        read -r custom_path
+        if [ -z "$custom_path" ]; then
+            echo -e "${RED}エラー: パスを入力してください${NC}"
+            return 1
+        fi
+        if [ ! -e "$custom_path" ]; then
+            echo -e "${YELLOW}警告: 指定されたパスが見つかりません: $custom_path${NC}"
+            echo -ne "${BLUE}このパスを保存しますか？ [y/N]: ${NC}"
+            read -r confirm
+            if [[ ! "$confirm" =~ ^[yY] ]]; then
+                return 1
+            fi
+        fi
+        # フルパスで保存
+        set_config "editor" "$custom_path"
+        echo -e "${GREEN}✓${NC} エディタを設定しました: $custom_path"
+    elif [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
+        local idx=$((choice - 1))
+        local selected_id="${editors[$idx]}"
+        local selected_name="${names[$idx]}"
+        local selected_path="${paths[$idx]}"
+        # IDのみを保存（パスは起動時に動的検出）
+        set_config "editor" "$selected_id"
+        echo -e "${GREEN}✓${NC} エディタを設定しました: $selected_name"
+        echo "     (バージョン更新時も自動検出します)"
+    else
+        echo -e "${RED}エラー: 無効な選択です${NC}"
+        return 1
+    fi
+
+    echo ""
+    echo "設定ファイル: $(config_path)"
+    return 0
+}
+
+# 設定済みエディタのパスを取得（なければ選択フローを実行）
+# 戻り値: editor_path (標準出力)
+# 副作用: EDITOR_NAME グローバル変数にエディタ名を設定
+get_configured_editor() {
+    local editor_config
+    editor_config=$(get_config "editor" "")
+
+    if [ -n "$editor_config" ]; then
+        # フルパスの場合（/ で始まる）
+        if [[ "$editor_config" == /* ]]; then
+            if [ ! -e "$editor_config" ]; then
+                echo -e "${YELLOW}警告: 設定されたエディタが見つかりません: $editor_config${NC}" >&2
+                echo -e "${YELLOW}       バージョンアップにより古いパスが無効になった可能性があります${NC}" >&2
+                echo -e "${YELLOW}       irie open --setup で再設定してください${NC}" >&2
+                return 1
+            fi
+            EDITOR_NAME=$(basename "$editor_config" | sed 's/64\.exe$//' | sed 's/\.exe$//' | sed 's/\.app$//')
+            echo "$editor_config"
+            return 0
+        fi
+
+        # エディタIDの場合 - 動的にパスを検出
+        local editor_id="$editor_config"
+        local editor_path
+        if editor_path=$(get_editor_path_by_id "$editor_id"); then
+            EDITOR_NAME=$(get_editor_name_by_id "$editor_id")
+            echo "$editor_path"
+            return 0
+        else
+            # IDに対応するエディタが見つからない
+            echo -e "${YELLOW}警告: エディタ '$editor_id' が見つかりません${NC}" >&2
+            echo -e "${YELLOW}       アンインストールされたか、パスが変更された可能性があります${NC}" >&2
+            echo -e "${YELLOW}       irie open --setup で再設定してください${NC}" >&2
+            return 1
+        fi
+    fi
+
+    # 未設定の場合は選択フローを実行
+    echo -e "${BLUE}=== エディタの初期設定 ===${NC}" >&2
+    echo "" >&2
+    echo "irie open を使用するにはエディタの設定が必要です。" >&2
+
+    if select_editor_interactive >&2; then
+        # 設定が成功したら、再帰的に取得
+        get_configured_editor
+    else
+        return 1
+    fi
+}
+
+# メイン処理
+main() {
+    local target_name=""
+    local custom_editor=""
+    local show_list=false
+    local run_setup=false
+
+    # 引数解析
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            --editor)
+                custom_editor="$2"
+                shift 2
+                ;;
+            --list)
+                show_list=true
+                shift
+                ;;
+            --setup)
+                run_setup=true
+                shift
+                ;;
+            -*)
+                echo -e "${RED}エラー: 不明なオプション: $1${NC}"
+                exit 1
+                ;;
+            *)
+                if [ -z "$target_name" ]; then
+                    target_name="$1"
+                else
+                    echo -e "${RED}エラー: 引数が多すぎます${NC}"
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # --list オプション
+    if [ "$show_list" = true ]; then
+        echo "利用可能なworktree:"
+        list_worktrees_for_open | while read -r name; do
+            echo "  $name"
+        done
+        exit 0
+    fi
+
+    # --setup オプション
+    if [ "$run_setup" = true ]; then
+        echo -e "${BLUE}=== エディタ設定 ===${NC}"
+        select_editor_interactive
+        exit $?
+    fi
+
+    # エディタを決定
+    local editor
+    if [ -n "$custom_editor" ]; then
+        if [ ! -e "$custom_editor" ]; then
+            echo -e "${RED}エラー: エディタが見つかりません: $custom_editor${NC}"
+            exit 1
+        fi
+        editor="$custom_editor"
+    else
+        if ! editor=$(get_configured_editor); then
+            exit 1
+        fi
+    fi
+
+    # ターゲットディレクトリを決定
+    local target_path
+    if [ -z "$target_name" ]; then
+        target_path="$(pwd)"
+    else
+        if ! target_path=$(get_worktree_path "$target_name"); then
+            echo -e "${RED}エラー: worktreeが見つかりません: $target_name${NC}"
+            echo ""
+            echo "利用可能なworktree:"
+            list_worktrees_for_open | while read -r name; do
+                echo "  $name"
+            done
+            exit 1
+        fi
+    fi
+
+    # エディタ名を取得（表示用）- get_configured_editorで設定されていない場合はパスから取得
+    local editor_name
+    if [ -n "${EDITOR_NAME:-}" ]; then
+        editor_name="$EDITOR_NAME"
+    else
+        editor_name=$(basename "$editor" | sed 's/64\.exe$//' | sed 's/\.exe$//' | sed 's/\.app$//')
+    fi
+
+    local platform
+    platform=$(detect_platform)
+
+    echo -e "${BLUE}=== irie open ===${NC}"
+    echo -e "プラットフォーム: $platform"
+    echo -e "エディタ: $editor_name"
+    echo -e "パス: $target_path"
+
+    # WSLの場合はWindowsパスも表示
+    if [ "$platform" = "wsl" ]; then
+        local windows_path
+        if command -v wslpath &>/dev/null; then
+            windows_path=$(wslpath -w "$target_path")
+        else
+            windows_path=$(echo "$target_path" | sed 's|^/mnt/\([a-z]\)/|\U\1:/|' | sed 's|/|\\|g')
+        fi
+        echo -e "Windowsパス: $windows_path"
+    fi
+
+    echo ""
+    echo -e "${BLUE}  → エディタを起動中...${NC}"
+
+    # エディタを起動
+    open_with_editor "$editor" "$target_path"
+
+    echo -e "${GREEN}完了${NC}"
+}
+
+main "$@"

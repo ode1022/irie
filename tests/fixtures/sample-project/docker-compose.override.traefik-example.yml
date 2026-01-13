@@ -1,0 +1,26 @@
+# Traefik方式テンプレート（テスト用）
+
+name: sample-project-{{DIR_NAME}}
+
+services:
+  nginx:
+    ports: !override []
+    networks:
+      - default
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      # HTTP
+      - "traefik.http.routers.{{TRAEFIK_ID}}.rule=Host(`{{FQDN}}`)"
+      - "traefik.http.routers.{{TRAEFIK_ID}}.entrypoints=web"
+      # HTTPS
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.rule=Host(`{{FQDN}}`)"
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.entrypoints=websecure"
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.tls=true"
+      # Service
+      - "traefik.http.services.{{TRAEFIK_ID}}.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik-network"
+
+networks:
+  traefik-network:
+    external: true

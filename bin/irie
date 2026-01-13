@@ -1,0 +1,164 @@
+#!/bin/bash
+
+# irie - Git Worktree + Docker 並行開発ツール
+# メインコマンド（サブコマンド振り分け）
+
+set -e
+
+IRIE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# カラー出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+show_help() {
+    cat << 'EOF'
+irie - Git Worktree + Docker 並行開発ツール
+
+使い方:
+  irie <command> [options]
+
+コマンド:
+  clone <url>           Bareリポジトリ構成でクローン（推奨）
+  convert               既存リポジトリをBare構成に変換
+  add <branch>          worktree作成（Traefik + 共有DB方式）
+  remove <branch>       worktree削除
+  list                  worktree一覧表示
+  status                各worktreeのgit状態を表示
+  cd <name>             worktreeディレクトリに移動（shell-init必須）
+  open [name]           worktreeをエディタで開く
+  info                  worktree情報表示
+  config                設定の表示・変更
+  init                  Claude Codeでプロジェクト用テンプレートを生成
+  override <mode>       テンプレートからdocker-compose.override.ymlを生成
+  update                irieを最新版に更新
+  shell-init            シェル統合スクリプトを出力（irie cd用）
+  completion            シェル補完スクリプトを出力
+  help                  このヘルプを表示
+
+例:
+  # Bareリポジトリ構成（推奨）
+  irie clone git@github.com:user/repo.git
+  cd repo && irie add feat/new-feature
+
+  # 既存リポジトリの変換
+  cd existing-repo && irie convert
+
+  # worktree操作
+  irie add feat/new-feature              # mainと同じDBを使用（デフォルト）
+  irie add feat/new-feature --separate-db  # 専用DBを使用（マイグレーション実行）
+  irie add main --root                   # ルートworktree
+  irie remove app1 --force
+  irie list                              # worktree一覧
+  irie status                            # 各worktreeの状態
+  irie cd                                # fzf/pecoで選択して移動
+  irie cd app1                           # app1 worktreeに移動
+  irie info
+
+シェル統合（.bashrc/.zshrcに追加）:
+  eval "$(irie shell-init bash)"         # irie cd を有効化
+
+補完の有効化（任意）:
+  eval "$(irie completion bash)"
+
+詳細: https://github.com/ode1022/irie
+EOF
+}
+
+show_version() {
+    local version
+    # .release-please-manifest.jsonから読み取り（release-pleaseが自動更新）
+    if [ -f "$IRIE_DIR/.release-please-manifest.json" ]; then
+        version=$(grep -o '"\.": *"[^"]*"' "$IRIE_DIR/.release-please-manifest.json" | grep -o '[0-9][0-9.]*')
+    fi
+    # フォールバック: VERSIONファイル（マーカーを除去）
+    if [ -z "$version" ] && [ -f "$IRIE_DIR/VERSION" ]; then
+        version=$(awk '{print $1}' "$IRIE_DIR/VERSION")
+    fi
+    echo "irie version ${version:-unknown}"
+}
+
+# サブコマンドの実行
+case "${1:-}" in
+    clone)
+        shift
+        exec "$IRIE_DIR/bin/irie-clone" "$@"
+        ;;
+    convert)
+        shift
+        exec "$IRIE_DIR/bin/irie-convert" "$@"
+        ;;
+    init)
+        shift
+        exec "$IRIE_DIR/bin/irie-init" "$@"
+        ;;
+    add)
+        shift
+        exec "$IRIE_DIR/bin/irie-add-traefik" "$@"
+        ;;
+    remove)
+        shift
+        exec "$IRIE_DIR/bin/irie-remove" "$@"
+        ;;
+    list)
+        shift
+        exec "$IRIE_DIR/bin/irie-list" "$@"
+        ;;
+    status)
+        shift
+        exec "$IRIE_DIR/bin/irie-status" "$@"
+        ;;
+    info)
+        shift
+        exec "$IRIE_DIR/bin/irie-info" "$@"
+        ;;
+    open)
+        shift
+        exec "$IRIE_DIR/bin/irie-open" "$@"
+        ;;
+    config)
+        shift
+        exec "$IRIE_DIR/bin/irie-config" "$@"
+        ;;
+    override)
+        shift
+        exec "$IRIE_DIR/bin/irie-override" "$@"
+        ;;
+    update)
+        shift
+        exec "$IRIE_DIR/bin/irie-update" "$@"
+        ;;
+    completion)
+        shift
+        exec "$IRIE_DIR/bin/irie-completion" "$@"
+        ;;
+    shell-init)
+        shift
+        exec "$IRIE_DIR/bin/irie-shell-init" "$@"
+        ;;
+    cd)
+        echo -e "${RED}エラー: irie cd を使用するにはシェル統合が必要です${NC}"
+        echo ""
+        echo "以下を .bashrc または .zshrc に追加してください:"
+        echo '  eval "$(irie shell-init bash)"'
+        exit 1
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    version|--version|-v)
+        show_version
+        ;;
+    "")
+        show_help
+        ;;
+    *)
+        echo -e "${RED}エラー: 不明なコマンド: $1${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
