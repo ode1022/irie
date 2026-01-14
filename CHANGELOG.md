@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/ode1022/irie/compare/irie-v1.1.2...irie-v1.1.3) (2026-01-14)
+
+
+### Performance Improvements
+
+* MySQLに開発環境向けチューニングを追加 ([a9a91b8](https://github.com/ode1022/irie/commit/a9a91b8cd7c1c6b62fdcae7f06abe9575a79ca25))
+
 ## [1.1.2](https://github.com/ode1022/irie/compare/irie-v1.1.1...irie-v1.1.2) (2026-01-14)
 
 
