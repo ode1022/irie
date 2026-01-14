@@ -500,8 +500,8 @@ teardown() {
     echo "$output" | grep -qi "main.*削除できません"
 }
 
-# 削除したworktree内にいた場合__IRIE_CD__マーカーを出力
-@test "irie remove: outputs __IRIE_CD__ marker when in deleted worktree" {
+# 削除したworktree内にいた場合、プロジェクトルートパスをstdoutに出力
+@test "irie remove: outputs project root path when in deleted worktree" {
     # ソースリポジトリを作成
     mkdir -p "$TEST_TMP_DIR/source-repo"
     cd "$TEST_TMP_DIR/source-repo"
@@ -522,10 +522,11 @@ teardown() {
 
     # feature-1に移動して削除
     cd "$TEST_TMP_DIR/test-project/feature-1"
-    run "$IRIE_DIR/bin/irie" remove . --force     [ "$status" -eq 0 ]
+    run "$IRIE_DIR/bin/irie" remove . --force
+    [ "$status" -eq 0 ]
 
-    # __IRIE_CD__マーカーが出力されることを確認
-    echo "$output" | grep -q "^__IRIE_CD__:"
+    # プロジェクトルートパスがstdoutに出力されることを確認
+    echo "$output" | grep -q "test-project$"
 }
 
 # === Multiple worktree tests ===
