@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.8](https://github.com/ode1022/irie/compare/irie-v1.1.7...irie-v1.1.8) (2026-01-14)
+
+
+### Bug Fixes
+
+* shell関数の出力バッファリング問題を修正 ([4634dab](https://github.com/ode1022/irie/commit/4634dab4a094261680fd8fa299227203f3e7d318))
+
 ## [1.1.7](https://github.com/ode1022/irie/compare/irie-v1.1.6...irie-v1.1.7) (2026-01-14)
 
 
