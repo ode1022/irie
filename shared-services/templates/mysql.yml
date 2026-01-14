@@ -35,9 +35,18 @@ services:
       - "127.0.0.1:3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+    # 開発環境向けチューニング（本番では使用しないこと）
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=300
+      - --innodb_buffer_pool_size=256M
+      - --innodb_log_buffer_size=64M
+      - --innodb_flush_log_at_trx_commit=0
+      - --innodb_doublewrite=0
+      - --sync_binlog=0
+      - --innodb_flush_method=O_DIRECT
+      - --skip-log-bin
     networks:
       shared-db:
         aliases:
