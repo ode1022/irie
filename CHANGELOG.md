@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/ode1022/irie/compare/irie-v1.1.5...irie-v1.1.6) (2026-01-14)
+
+
+### Bug Fixes
+
+* stderr出力を削除してstdbufのみに統一 ([c3c7fc3](https://github.com/ode1022/irie/commit/c3c7fc3047227e4def085d90230a0190ac401b41))
+
 ## [1.1.5](https://github.com/ode1022/irie/compare/irie-v1.1.4...irie-v1.1.5) (2026-01-14)
 
 
