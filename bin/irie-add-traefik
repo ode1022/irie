@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# 出力を行バッファに変更（docker compose等の出力と混在しないように）
+if [ -z "$IRIE_UNBUFFERED" ] && command -v stdbuf &>/dev/null; then
+    exec env IRIE_UNBUFFERED=1 stdbuf -oL "$0" "$@"
+fi
+
 # Git worktree自動セットアップスクリプト（Traefik版・共有DB対応）
 # Usage: ./setup_worktree_traefik.sh <branch-name-or-dir-name> [options]
 # Example:
