@@ -97,7 +97,12 @@ case "${1:-}" in
         ;;
     add)
         shift
-        exec "$IRIE_DIR/bin/irie-add-traefik" "$@"
+        # stdbufで行バッファに変更（docker compose等の出力と混在しないように）
+        if command -v stdbuf &>/dev/null; then
+            exec stdbuf -oL "$IRIE_DIR/bin/irie-add-traefik" "$@"
+        else
+            exec "$IRIE_DIR/bin/irie-add-traefik" "$@"
+        fi
         ;;
     remove)
         shift
