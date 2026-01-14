@@ -11,6 +11,7 @@ Laravel、Rails、FastAPI等のフレームワークと相性が良く、複数�
 - **パスワード共有が簡単** - サブドメイン間でChromeの保存パスワードを共有。ルートドメインで一度ログインすれば、全worktreeで自動入力
 - **共有DB** - 複数worktreeで1つのPostgreSQLを共有、DataGrip等の設定も1回だけ
 - **WSL2完全対応** - WSL2 + Windows環境での開発を想定した設計。JetBrains IDE連携も対応
+- **エディタ連携** - `irie open`でworktreeをエディタ/IDEで即座に開く。VSCode、Cursor、JetBrains IDE、Vimなど主要エディタに対応
 - **Bare構成で安全** - 親フォルダで誤って`git commit`できない設計
 - **Claude Code連携** - `irie init`でdocker-compose.ymlを解析してテンプレートを自動生成
 

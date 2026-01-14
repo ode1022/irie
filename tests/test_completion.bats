@@ -14,9 +14,9 @@ setup() {
     # 別プロジェクト（補完に出てはいけない）
     mkdir -p "$TEST_DIR/other-project"
     mkdir -p "$TEST_DIR/unrelated-folder"
+}
 
-    # 補完スクリプトからヘルパー関数を抽出して読み込み
-    eval "$(cat << 'HELPER_FUNCTIONS'
+# ヘルパー関数（グローバルに定義）
 _irie_find_project_root() {
     local dir="$PWD"
     while [ "$dir" != "/" ]; do
@@ -38,9 +38,6 @@ _irie_get_worktrees() {
         [ "$name" = ".bare" ] && continue
         echo "$name"
     done
-}
-HELPER_FUNCTIONS
-)"
 }
 
 teardown() {

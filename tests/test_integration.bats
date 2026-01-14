@@ -94,7 +94,7 @@ teardown_file() {
 
     # テスト終了時にworktreeとコンテナをクリーンアップ
     if [ -n "$TEST_WORKTREE_BASE" ]; then
-        for worktree in test-traefik test-same-db test-separate-db; do
+        for worktree in test-traefik test-same-db test-separate-db test-base-default test-base-explicit; do
             WORKTREE_PATH="$TEST_WORKTREE_BASE/$worktree"
             if [ -d "$WORKTREE_PATH" ]; then
                 # Dockerコンテナを停止・削除
@@ -407,6 +407,70 @@ wait_for_http() {
 
     [ ! -d "$TEST_WORKTREE_BASE/test-same-db" ]
     [ ! -d "$TEST_WORKTREE_BASE/test-separate-db" ]
+}
+
+# === Base branch tests ===
+# ベースブランチテスト
+
+# worktree内から--baseなしで実行すると、現在のブランチから派生する
+@test "Base branch: defaults to current branch when run from worktree" {
+    cd "$TEST_PROJECT_DIR"
+
+    # featureブランチを作成してチェックアウト
+    git checkout -b feat/base-test-feature
+    echo "feature content" > feature.txt
+    git add feature.txt
+    git commit -m "Add feature content"
+
+    # このブランチから--baseなしでworktree作成
+    run "$IRIE_DIR/bin/irie" add test-base-default
+    [ "$status" -eq 0 ]
+
+    # worktreeが作成されている
+    [ -d "$TEST_WORKTREE_BASE/test-base-default" ]
+
+    # 作成されたworktreeにfeature.txtが存在する（feat/base-test-featureから派生した証拠）
+    [ -f "$TEST_WORKTREE_BASE/test-base-default/feature.txt" ]
+
+    # mainに戻る
+    git checkout main
+}
+
+# --baseを明示的に指定すると、そのブランチから派生する
+@test "Base branch: uses specified branch when --base is provided" {
+    cd "$TEST_PROJECT_DIR"
+
+    # featureブランチにいる状態から、mainを--baseに指定
+    git checkout feat/base-test-feature 2>/dev/null || git checkout -b feat/base-test-feature
+
+    run "$IRIE_DIR/bin/irie" add test-base-explicit --base main
+    [ "$status" -eq 0 ]
+
+    # worktreeが作成されている
+    [ -d "$TEST_WORKTREE_BASE/test-base-explicit" ]
+
+    # feature.txtが存在しない（mainから派生した証拠）
+    [ ! -f "$TEST_WORKTREE_BASE/test-base-explicit/feature.txt" ]
+
+    # mainに戻る
+    git checkout main
+}
+
+# ベースブランチテスト用worktreeをクリーンアップ
+@test "Base branch: cleanup test worktrees" {
+    cd "$TEST_PROJECT_DIR"
+
+    for worktree in test-base-default test-base-explicit; do
+        WORKTREE_PATH="$TEST_WORKTREE_BASE/$worktree"
+        if [ -d "$WORKTREE_PATH" ]; then
+            cd "$WORKTREE_PATH" 2>/dev/null && docker-compose down 2>/dev/null || true
+            cd "$TEST_PROJECT_DIR"
+            run "$IRIE_DIR/bin/irie" remove "$worktree" --force
+        fi
+    done
+
+    [ ! -d "$TEST_WORKTREE_BASE/test-base-default" ]
+    [ ! -d "$TEST_WORKTREE_BASE/test-base-explicit" ]
 }
 
 # === Shared DB connection tests ===

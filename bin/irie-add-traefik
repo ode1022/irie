@@ -121,6 +121,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --baseが指定されていない場合、現在のworktreeのブランチをデフォルトにする
+# （一般的なgit branch/worktree addの挙動に合わせる）
+if [ -z "$BASE_BRANCH" ]; then
+    # 現在のディレクトリがgitリポジトリ（worktree）内にいるか確認
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+    if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "HEAD" ]; then
+        BASE_BRANCH="$CURRENT_BRANCH"
+        BASE_BRANCH_AUTO=true
+    fi
+fi
+
 # 引数チェック
 if [ -z "$BRANCH_NAME" ]; then
     echo -e "${RED}エラー: ブランチ名またはディレクトリ名を指定してください${NC}"
@@ -188,7 +199,11 @@ else
     echo -e "${YELLOW}DBモード: mainと共有（マイグレーションをスキップ）${NC}"
 fi
 if [ -n "$BASE_BRANCH" ]; then
-    echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
+    if [ "${BASE_BRANCH_AUTO:-}" = "true" ]; then
+        echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH} (現在のブランチ)${NC}"
+    else
+        echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
+    fi
 fi
 echo ""
 

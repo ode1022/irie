@@ -85,6 +85,21 @@ _irie_completions() {
         done
     }
 
+    # gitブランチ一覧を取得する関数
+    _irie_get_branches() {
+        local project_root
+        project_root=$(_irie_find_project_root) || return
+        git -C "$project_root/.bare" branch -a --format='%(refname:short)' 2>/dev/null
+    }
+
+    # --base の後はブランチを補完
+    if [[ "${prev}" == "--base" ]]; then
+        local branches
+        branches=$(_irie_get_branches)
+        COMPREPLY=($(compgen -W "${branches}" -- "${cur}"))
+        return
+    fi
+
     case "${cword}" in
         1)
             COMPREPLY=($(compgen -W "${commands}" -- "${cur}"))
@@ -195,23 +210,36 @@ _irie() {
         'uninstall:補完スクリプトをアンインストール'
     )
 
-    # プロジェクトルートを探してworktree一覧を取得
-    _irie_get_worktrees() {
-        local dir="$PWD" project_root=""
+    # プロジェクトルートを探す
+    _irie_find_project_root() {
+        local dir="$PWD"
         while [[ "$dir" != "/" ]]; do
             if [[ -d "$dir/.bare" ]]; then
-                project_root="$dir"
-                break
+                echo "$dir"
+                return 0
             fi
             dir=$(dirname "$dir")
         done
-        [[ -z "$project_root" ]] && return
+        return 1
+    }
+
+    # プロジェクトルートを探してworktree一覧を取得
+    _irie_get_worktrees() {
+        local project_root
+        project_root=$(_irie_find_project_root) || return
         for d in "$project_root"/*/; do
             [[ -d "$d" ]] || continue
             local name=$(basename "$d")
             [[ "$name" == ".bare" ]] && continue
             echo "$name"
         done
+    }
+
+    # gitブランチ一覧を取得
+    _irie_get_branches() {
+        local project_root
+        project_root=$(_irie_find_project_root) || return
+        git -C "$project_root/.bare" branch -a --format='%(refname:short)' 2>/dev/null
     }
 
     _arguments -C \
@@ -242,7 +270,7 @@ _irie() {
                 add)
                     _arguments \
                         '1:branch name:' \
-                        '--base[ベースブランチを指定]:branch:' \
+                        '--base[ベースブランチを指定]:branch:($(_irie_get_branches))' \
                         '--root[ルートドメインで作成]' \
                         '--separate-db[専用DBを使用（マイグレーション実行）]' \
                         '--help[ヘルプを表示]'
