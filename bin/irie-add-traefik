@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Git worktree自動セットアップスクリプト（Traefik版・共有DB対応）
-# 注: stdbufはirie本体から適用される（bin/irie参照）
 # Usage: ./setup_worktree_traefik.sh <branch-name-or-dir-name> [options]
 # Example:
 #   ./setup_worktree_traefik.sh feat/new-feature
