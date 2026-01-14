@@ -298,7 +298,8 @@ echo ""
 echo -e "${GREEN}=== 削除完了 ===${NC}"
 echo ""
 
-# シェル統合用マーカー（削除したworktree内にいた場合、プロジェクトルートへ自動cd）
+# シェル統合用（削除したworktree内にいた場合、プロジェクトルートへ自動cd）
 if [ "$WAS_IN_DELETED_WORKTREE" = true ]; then
-    echo "__IRIE_CD__:${PROJECT_ROOT}"
+    mkdir -p "$HOME/.irie"
+    echo "${PROJECT_ROOT}" > "$HOME/.irie/.last_cd"
 fi

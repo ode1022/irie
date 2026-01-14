@@ -47,12 +47,11 @@ irie() {
         __irie_cd "$@"
     elif [ "$1" = "add" ] || [ "$1" = "remove" ]; then
         # irie add/remove を実行し、自動cdする
-        # 出力をバッファせず直接表示（順序を保持するため）
-        local cd_file="$HOME/.irie/.last_cd_$$"
-        command irie "$@" | awk -v f="$cd_file" '/^__IRIE_CD__:/{print substr($0,14)>f;next}{print;fflush()}'
+        # パイプを使わず直接実行（出力順序を保持）
+        rm -f "$HOME/.irie/.last_cd"
+        command irie "$@"
         local cd_path
-        cd_path=$(cat "$cd_file" 2>/dev/null)
-        rm -f "$cd_file"
+        cd_path=$(cat "$HOME/.irie/.last_cd" 2>/dev/null)
         if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
             cd "$cd_path" || return 1
             echo "移動しました: $cd_path"
@@ -236,12 +235,11 @@ irie() {
         __irie_cd "$@"
     elif [ "$1" = "add" ] || [ "$1" = "remove" ]; then
         # irie add/remove を実行し、自動cdする
-        # 出力をバッファせず直接表示（順序を保持するため）
-        local cd_file="$HOME/.irie/.last_cd_$$"
-        command irie "$@" | awk -v f="$cd_file" '/^__IRIE_CD__:/{print substr($0,14)>f;next}{print;fflush()}'
+        # パイプを使わず直接実行（出力順序を保持）
+        rm -f "$HOME/.irie/.last_cd"
+        command irie "$@"
         local cd_path
-        cd_path=$(cat "$cd_file" 2>/dev/null)
-        rm -f "$cd_file"
+        cd_path=$(cat "$HOME/.irie/.last_cd" 2>/dev/null)
         if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
             cd "$cd_path" || return 1
             echo "移動しました: $cd_path"

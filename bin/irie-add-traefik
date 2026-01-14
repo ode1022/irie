@@ -395,5 +395,6 @@ echo -e "${YELLOW}Traefikダッシュボード:${NC}"
 echo -e "  http://traefik.localhost/"
 echo ""
 
-# シェル統合用マーカー（自動cd用）
-echo "__IRIE_CD__:$(realpath "$WORKTREE_PATH")"
+# シェル統合用（自動cd用）- ファイルに書き込み
+mkdir -p "$HOME/.irie"
+realpath "$WORKTREE_PATH" > "$HOME/.irie/.last_cd"
