@@ -208,9 +208,13 @@ if [ -n "$BASE_BRANCH" ]; then
 fi
 echo ""
 
+# stdoutバッファをフラッシュ（外部コマンドのstderr出力より前に表示させるため）
+sleep 0.05
+
 # 1. git worktreeを作成
 echo ""
 echo -e "${GREEN}[1/6] Git worktreeを作成中...${NC}"
+sleep 0.02  # stdoutフラッシュ
 WORKTREE_PATH="${WORK_DIR}/../${DIR_NAME}"
 if [ -d "$WORKTREE_PATH" ]; then
     echo -e "${YELLOW}警告: worktree '$DIR_NAME' は既に存在します${NC}"
@@ -222,6 +226,7 @@ else
         cd "$PROJECT_ROOT/.bare"
         if [ -n "$BASE_BRANCH" ]; then
             echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
+            sleep 0.02  # stdoutフラッシュ
             git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
         else
             git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" 2>/dev/null || git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
@@ -230,6 +235,7 @@ else
         cd "$WORK_DIR"
         if [ -n "$BASE_BRANCH" ]; then
             echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
+            sleep 0.02  # stdoutフラッシュ
             git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
         else
             git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" 2>/dev/null || git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
@@ -276,6 +282,7 @@ fi
 cd "$WORKTREE_PATH"
 if [ -f "docker-compose.yaml" ] || [ -f "docker-compose.yml" ]; then
     echo -e "${GREEN}[4/6] Dockerコンテナを起動中...${NC}"
+    sleep 0.02  # stdoutフラッシュ
 
     # shared-servicesの定義ファイルを準備（テンプレートからコピー）
     setup_shared_service() {
@@ -299,6 +306,7 @@ if [ -f "docker-compose.yaml" ] || [ -f "docker-compose.yml" ]; then
         TRAEFIK_CONTAINER="shared-traefik"
         if ! docker ps --format '{{.Names}}' | grep -q "${TRAEFIK_CONTAINER}"; then
             echo -e "${BLUE}  → Traefikを起動中...${NC}"
+            sleep 0.02  # stdoutフラッシュ
 
             # traefik.ymlをテンプレートからコピー
             setup_shared_service "traefik"
@@ -322,6 +330,7 @@ if [ -f "docker-compose.yaml" ] || [ -f "docker-compose.yml" ]; then
 
     # worktreeのコンテナを起動
     cd "$WORKTREE_PATH"
+    sleep 0.02  # stdoutフラッシュ
     docker compose up -d
     echo -e "${GREEN}✓ Dockerコンテナ起動完了${NC}"
 else
@@ -330,10 +339,12 @@ fi
 
 # 5. 初期セットアップコマンドを実行
 echo -e "${GREEN}[5/6] 初期セットアップコマンドを実行中...${NC}"
+sleep 0.02  # stdoutフラッシュ
 
 # post-setup.shが存在すれば実行
 if [ -f "${WORK_DIR}/post-setup.sh" ]; then
     echo -e "${BLUE}  → post-setup.sh を実行中...${NC}"
+    sleep 0.02  # stdoutフラッシュ
     # 環境変数をエクスポートしてpost-setup.shを実行
     export WORKTREE_DIR="$DIR_NAME"
     export WORKTREE_BRANCH="$BRANCH_NAME"
