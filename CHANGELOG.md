@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/ode1022/irie/compare/irie-v1.1.1...irie-v1.1.2) (2026-01-14)
+
+
+### Bug Fixes
+
+* restore Japanese comments in test_completion.bats ([7d8ee13](https://github.com/ode1022/irie/commit/7d8ee138fb8f7729bb7e4f075f1f83b8c38ec6f2))
+
 ## [1.1.1](https://github.com/ode1022/irie/compare/irie-v1.1.0...irie-v1.1.1) (2026-01-14)
 
 
