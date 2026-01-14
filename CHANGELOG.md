@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.7](https://github.com/ode1022/irie/compare/irie-v1.1.6...irie-v1.1.7) (2026-01-14)
+
+
+### Bug Fixes
+
+* stdbufをirie本体から適用するように変更 ([abb788d](https://github.com/ode1022/irie/commit/abb788d825ec692d9f89632d8caba131e5ad708e))
+
 ## [1.1.6](https://github.com/ode1022/irie/compare/irie-v1.1.5...irie-v1.1.6) (2026-01-14)
 
 
