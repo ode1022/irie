@@ -1,22 +1,22 @@
 #!/usr/bin/env bats
 
-# Completion script tests
+# 補完スクリプトのテスト
 
 setup() {
     TEST_DIR=$(mktemp -d)
 
-    # Create test project with bare structure
+    # Bare構成のテストプロジェクトを作成
     mkdir -p "$TEST_DIR/my-project/.bare"
     mkdir -p "$TEST_DIR/my-project/main"
     mkdir -p "$TEST_DIR/my-project/feature-a"
     mkdir -p "$TEST_DIR/my-project/feature-b"
 
-    # Other projects (should not appear in completion)
+    # 別プロジェクト（補完に出てはいけない）
     mkdir -p "$TEST_DIR/other-project"
     mkdir -p "$TEST_DIR/unrelated-folder"
 }
 
-# Helper functions (defined globally)
+# ヘルパー関数（グローバルに定義）
 _irie_find_project_root() {
     local dir="$PWD"
     while [ "$dir" != "/" ]; do
@@ -109,7 +109,7 @@ teardown() {
 
     result=$(_irie_get_worktrees)
 
-    # Should not include other-project or unrelated-folder
+    # other-projectやunrelated-folderが含まれていないこと
     [[ ! "$result" =~ "other-project" ]]
     [[ ! "$result" =~ "unrelated-folder" ]]
 }
@@ -117,7 +117,7 @@ teardown() {
 @test "_irie_get_worktrees: returns empty when .bare is not found" {
     cd "$TEST_DIR/other-project"
 
-    # Should output nothing and exit (failure code is OK)
+    # .bareがない場合は何も出力せずに終了（失敗コードでもOK）
     result=$(_irie_get_worktrees 2>/dev/null || true)
 
     [ -z "$result" ]
@@ -132,7 +132,7 @@ teardown() {
 }
 
 @test "completion script: zsh has valid syntax" {
-    # Skip if zsh is not installed
+    # zshがインストールされていない場合はスキップ
     command -v zsh >/dev/null || skip "zsh is not installed"
 
     IRIE_DIR="$(cd "$(dirname "${BATS_TEST_DIRNAME}")" && pwd)"
@@ -145,7 +145,7 @@ teardown() {
 @test "detect_shell: returns zsh when SHELL is /bin/zsh" {
     IRIE_DIR="$(cd "$(dirname "${BATS_TEST_DIRNAME}")" && pwd)"
 
-    # Extract and run detect_shell function
+    # detect_shell関数を抽出して実行
     detect_shell() {
         if [ -n "$SHELL" ]; then
             basename "$SHELL"
@@ -204,12 +204,12 @@ teardown() {
     export HOME="$TEST_DIR/home"
     mkdir -p "$HOME"
 
-    # Run with SHELL=zsh
+    # SHELL=zshで実行
     SHELL="/bin/zsh" run "$IRIE_DIR/bin/irie-completion" install
 
-    # Verify zsh completion file is created
+    # zsh補完ファイルが作成されていること
     [ -f "$HOME/.zsh/completions/_irie" ]
-    # Verify file content starts with #compdef
+    # ファイル内容が#compdefで始まること
     grep -q "^#compdef irie" "$HOME/.zsh/completions/_irie"
 }
 
@@ -218,11 +218,11 @@ teardown() {
     export HOME="$TEST_DIR/home"
     mkdir -p "$HOME"
 
-    # Run with SHELL=bash
+    # SHELL=bashで実行
     SHELL="/bin/bash" run "$IRIE_DIR/bin/irie-completion" install
 
-    # Verify bash completion file is created
+    # bash補完ファイルが作成されていること
     [ -f "$HOME/.local/share/bash-completion/completions/irie" ]
-    # Verify file contains complete -F
+    # ファイル内容がcomplete -Fを含むこと
     grep -q "complete -F _irie_completions irie" "$HOME/.local/share/bash-completion/completions/irie"
 }
