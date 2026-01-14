@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/ode1022/irie/compare/irie-v1.1.3...irie-v1.1.4) (2026-01-14)
+
+
+### Bug Fixes
+
+* ヘッダー出力をstderrに変更して即座に表示 ([f7f8254](https://github.com/ode1022/irie/commit/f7f8254291a1d3aadb7815beb172bc5fbdbd281d))
+
 ## [1.1.3](https://github.com/ode1022/irie/compare/irie-v1.1.2...irie-v1.1.3) (2026-01-14)
 
 
