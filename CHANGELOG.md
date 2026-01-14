@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.10](https://github.com/ode1022/irie/compare/irie-v1.1.9...irie-v1.1.10) (2026-01-14)
+
+
+### Bug Fixes
+
+* 出力順序を修正（stdoutフラッシュ用の遅延を追加） ([d412865](https://github.com/ode1022/irie/commit/d412865a41a2c76918e9652bf828d1a7b9d38ec3))
+
 ## [1.1.9](https://github.com/ode1022/irie/compare/irie-v1.1.8...irie-v1.1.9) (2026-01-14)
 
 
