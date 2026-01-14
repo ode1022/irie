@@ -192,28 +192,25 @@ else
     DB_NAME="$SAME_DB_NAME"
 fi
 
-# ヘッダーは即座に表示されるようstderrに出力（docker compose等の出力より先に表示）
-{
-    echo ""
-    echo -e "${BLUE}=== Git Worktree セットアップ開始（Traefik版） ===${NC}"
-    echo -e "${YELLOW}ブランチ名: ${BRANCH_NAME}${NC}"
-    echo -e "${YELLOW}ディレクトリ名: ${DIR_NAME}${NC}"
-    echo -e "${YELLOW}ホスト名: ${FQDN}${NC}"
-    echo -e "${YELLOW}データベース名: ${DB_NAME}${NC}"
-    if [ "$SEPARATE_DB" = "true" ]; then
-        echo -e "${YELLOW}DBモード: 専用DB（マイグレーション実行）${NC}"
+echo ""
+echo -e "${BLUE}=== Git Worktree セットアップ開始（Traefik版） ===${NC}"
+echo -e "${YELLOW}ブランチ名: ${BRANCH_NAME}${NC}"
+echo -e "${YELLOW}ディレクトリ名: ${DIR_NAME}${NC}"
+echo -e "${YELLOW}ホスト名: ${FQDN}${NC}"
+echo -e "${YELLOW}データベース名: ${DB_NAME}${NC}"
+if [ "$SEPARATE_DB" = "true" ]; then
+    echo -e "${YELLOW}DBモード: 専用DB（マイグレーション実行）${NC}"
+else
+    echo -e "${YELLOW}DBモード: mainと共有（マイグレーションをスキップ）${NC}"
+fi
+if [ -n "$BASE_BRANCH" ]; then
+    if [ "${BASE_BRANCH_AUTO:-}" = "true" ]; then
+        echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH} (現在のブランチ)${NC}"
     else
-        echo -e "${YELLOW}DBモード: mainと共有（マイグレーションをスキップ）${NC}"
+        echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
     fi
-    if [ -n "$BASE_BRANCH" ]; then
-        if [ "${BASE_BRANCH_AUTO:-}" = "true" ]; then
-            echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH} (現在のブランチ)${NC}"
-        else
-            echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
-        fi
-    fi
-    echo ""
-} >&2
+fi
+echo ""
 
 # 1. git worktreeを作成
 echo ""
