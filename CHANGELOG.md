@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.9](https://github.com/ode1022/irie/compare/irie-v1.1.8...irie-v1.1.9) (2026-01-14)
+
+
+### Bug Fixes
+
+* パイプを使わずファイル経由でcdパスを渡す ([9372134](https://github.com/ode1022/irie/commit/9372134fd91aedbadfd1279c91dff509d67bc31e))
+
 ## [1.1.8](https://github.com/ode1022/irie/compare/irie-v1.1.7...irie-v1.1.8) (2026-01-14)
 
 
