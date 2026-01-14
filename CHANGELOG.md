@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.11](https://github.com/ode1022/irie/compare/irie-v1.1.10...irie-v1.1.11) (2026-01-14)
+
+
+### Bug Fixes
+
+* 出力順序を確実に修正（exec 1&gt;&2でstderrに統一） ([fb96dd8](https://github.com/ode1022/irie/commit/fb96dd86d1e28f2fc267e67a66cc7586a0d5646c))
+
 ## [1.1.10](https://github.com/ode1022/irie/compare/irie-v1.1.9...irie-v1.1.10) (2026-01-14)
 
 
