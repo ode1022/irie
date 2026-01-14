@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.5](https://github.com/ode1022/irie/compare/irie-v1.1.4...irie-v1.1.5) (2026-01-14)
+
+
+### Bug Fixes
+
+* stdbufを使用して出力を即座にフラッシュ ([75a25c2](https://github.com/ode1022/irie/commit/75a25c2233233554c7959409a521ea8e4e571b69))
+
 ## [1.1.4](https://github.com/ode1022/irie/compare/irie-v1.1.3...irie-v1.1.4) (2026-01-14)
 
 
