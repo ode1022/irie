@@ -9,7 +9,8 @@
 set -e
 
 # ステータスメッセージはstderrに出力（docker等と同じストリームにして順序を保証）
-exec 1>&2
+# fd3に元のstdoutを保存（シェル関数がcdパスをキャプチャするため）
+exec 3>&1 1>&2
 
 # カラー出力用
 GREEN='\033[0;32m'
@@ -303,6 +304,5 @@ echo ""
 
 # シェル統合用（削除したworktree内にいた場合、プロジェクトルートへ自動cd）
 if [ "$WAS_IN_DELETED_WORKTREE" = true ]; then
-    mkdir -p "$HOME/.irie"
-    echo "${PROJECT_ROOT}" > "$HOME/.irie/.last_cd"
+    echo "${PROJECT_ROOT}" >&3
 fi

@@ -47,11 +47,9 @@ irie() {
         __irie_cd "$@"
     elif [ "$1" = "add" ] || [ "$1" = "remove" ]; then
         # irie add/remove を実行し、自動cdする
-        # パイプを使わず直接実行（出力順序を保持）
-        rm -f "$HOME/.irie/.last_cd"
-        command irie "$@"
+        # stdoutをキャプチャ（スクリプトはstderrに出力、cdパスのみstdoutに出力）
         local cd_path
-        cd_path=$(cat "$HOME/.irie/.last_cd" 2>/dev/null)
+        cd_path=$(command irie "$@")
         if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
             cd "$cd_path" || return 1
             echo "移動しました: $cd_path"
@@ -235,11 +233,9 @@ irie() {
         __irie_cd "$@"
     elif [ "$1" = "add" ] || [ "$1" = "remove" ]; then
         # irie add/remove を実行し、自動cdする
-        # パイプを使わず直接実行（出力順序を保持）
-        rm -f "$HOME/.irie/.last_cd"
-        command irie "$@"
+        # stdoutをキャプチャ（スクリプトはstderrに出力、cdパスのみstdoutに出力）
         local cd_path
-        cd_path=$(cat "$HOME/.irie/.last_cd" 2>/dev/null)
+        cd_path=$(command irie "$@")
         if [ -n "$cd_path" ] && [ -d "$cd_path" ]; then
             cd "$cd_path" || return 1
             echo "移動しました: $cd_path"

@@ -12,8 +12,8 @@
 set -e  # エラーが発生したら即座に終了
 
 # ステータスメッセージはstderrに出力（git/dockerと同じストリームにして順序を保証）
-# これはCLI標準パターン: stderr=ステータス/進捗、stdout=パイプ可能なデータ
-exec 1>&2
+# fd3に元のstdoutを保存（シェル関数がcdパスをキャプチャするため）
+exec 3>&1 1>&2
 
 # カラー出力用
 GREEN='\033[0;32m'
@@ -399,6 +399,5 @@ echo -e "${YELLOW}Traefikダッシュボード:${NC}"
 echo -e "  http://traefik.localhost/"
 echo ""
 
-# シェル統合用（自動cd用）- ファイルに書き込み
-mkdir -p "$HOME/.irie"
-realpath "$WORKTREE_PATH" > "$HOME/.irie/.last_cd"
+# シェル統合用（自動cd用）- fd3に出力（シェル関数がキャプチャ）
+realpath "$WORKTREE_PATH" >&3
