@@ -1,22 +1,22 @@
 #!/usr/bin/env bats
 
-# 補完スクリプトのテスト
+# Completion script tests
 
 setup() {
     TEST_DIR=$(mktemp -d)
 
-    # Bare構成のテストプロジェクトを作成
+    # Create test project with bare structure
     mkdir -p "$TEST_DIR/my-project/.bare"
     mkdir -p "$TEST_DIR/my-project/main"
     mkdir -p "$TEST_DIR/my-project/feature-a"
     mkdir -p "$TEST_DIR/my-project/feature-b"
 
-    # 別プロジェクト（補完に出てはいけない）
+    # Other projects (should not appear in completion)
     mkdir -p "$TEST_DIR/other-project"
     mkdir -p "$TEST_DIR/unrelated-folder"
 }
 
-# ヘルパー関数（グローバルに定義）
+# Helper functions (defined globally)
 _irie_find_project_root() {
     local dir="$PWD"
     while [ "$dir" != "/" ]; do
@@ -44,7 +44,7 @@ teardown() {
     rm -rf "$TEST_DIR"
 }
 
-@test "_irie_find_project_root: プロジェクトルートから.bareを見つける" {
+@test "_irie_find_project_root: finds .bare from project root" {
     cd "$TEST_DIR/my-project"
 
     result=$(_irie_find_project_root)
@@ -52,7 +52,7 @@ teardown() {
     [ "$result" = "$TEST_DIR/my-project" ]
 }
 
-@test "_irie_find_project_root: worktree内から親の.bareを見つける" {
+@test "_irie_find_project_root: finds parent .bare from worktree" {
     cd "$TEST_DIR/my-project/main"
 
     result=$(_irie_find_project_root)
@@ -60,7 +60,7 @@ teardown() {
     [ "$result" = "$TEST_DIR/my-project" ]
 }
 
-@test "_irie_find_project_root: ネストしたディレクトリから.bareを見つける" {
+@test "_irie_find_project_root: finds .bare from nested directory" {
     mkdir -p "$TEST_DIR/my-project/main/src/deep/nested"
     cd "$TEST_DIR/my-project/main/src/deep/nested"
 
@@ -69,7 +69,7 @@ teardown() {
     [ "$result" = "$TEST_DIR/my-project" ]
 }
 
-@test "_irie_find_project_root: .bareがない場合は失敗" {
+@test "_irie_find_project_root: fails when .bare is not found" {
     cd "$TEST_DIR/other-project"
 
     run _irie_find_project_root
@@ -78,7 +78,7 @@ teardown() {
     [ -z "$output" ]
 }
 
-@test "_irie_get_worktrees: プロジェクトルートからworktree一覧を取得" {
+@test "_irie_get_worktrees: lists worktrees from project root" {
     cd "$TEST_DIR/my-project"
 
     result=$(_irie_get_worktrees | sort)
@@ -87,7 +87,7 @@ teardown() {
     [ "$result" = "$expected" ]
 }
 
-@test "_irie_get_worktrees: .bareは一覧に含まれない" {
+@test "_irie_get_worktrees: excludes .bare from list" {
     cd "$TEST_DIR/my-project"
 
     result=$(_irie_get_worktrees)
@@ -95,7 +95,7 @@ teardown() {
     [[ ! "$result" =~ ".bare" ]]
 }
 
-@test "_irie_get_worktrees: worktree内からでも正しく取得" {
+@test "_irie_get_worktrees: works from inside worktree" {
     cd "$TEST_DIR/my-project/main"
 
     result=$(_irie_get_worktrees | sort)
@@ -104,20 +104,20 @@ teardown() {
     [ "$result" = "$expected" ]
 }
 
-@test "_irie_get_worktrees: 親ディレクトリの無関係なフォルダは含まれない" {
+@test "_irie_get_worktrees: excludes unrelated folders in parent directory" {
     cd "$TEST_DIR/my-project"
 
     result=$(_irie_get_worktrees)
 
-    # other-projectやunrelated-folderが含まれていないこと
+    # Should not include other-project or unrelated-folder
     [[ ! "$result" =~ "other-project" ]]
     [[ ! "$result" =~ "unrelated-folder" ]]
 }
 
-@test "_irie_get_worktrees: .bareがない場所では空を返す" {
+@test "_irie_get_worktrees: returns empty when .bare is not found" {
     cd "$TEST_DIR/other-project"
 
-    # .bareがない場合は何も出力せずに終了（失敗コードでもOK）
+    # Should output nothing and exit (failure code is OK)
     result=$(_irie_get_worktrees 2>/dev/null || true)
 
     [ -z "$result" ]
@@ -132,7 +132,7 @@ teardown() {
 }
 
 @test "completion script: zsh has valid syntax" {
-    # zshがインストールされていない場合はスキップ
+    # Skip if zsh is not installed
     command -v zsh >/dev/null || skip "zsh is not installed"
 
     IRIE_DIR="$(cd "$(dirname "${BATS_TEST_DIRNAME}")" && pwd)"
@@ -145,7 +145,7 @@ teardown() {
 @test "detect_shell: returns zsh when SHELL is /bin/zsh" {
     IRIE_DIR="$(cd "$(dirname "${BATS_TEST_DIRNAME}")" && pwd)"
 
-    # detect_shell関数を抽出して実行
+    # Extract and run detect_shell function
     detect_shell() {
         if [ -n "$SHELL" ]; then
             basename "$SHELL"
@@ -204,12 +204,12 @@ teardown() {
     export HOME="$TEST_DIR/home"
     mkdir -p "$HOME"
 
-    # SHELL=zshで実行
+    # Run with SHELL=zsh
     SHELL="/bin/zsh" run "$IRIE_DIR/bin/irie-completion" install
 
-    # zsh補完ファイルが作成されていること
+    # Verify zsh completion file is created
     [ -f "$HOME/.zsh/completions/_irie" ]
-    # ファイル内容が#compdefで始まること
+    # Verify file content starts with #compdef
     grep -q "^#compdef irie" "$HOME/.zsh/completions/_irie"
 }
 
@@ -218,11 +218,11 @@ teardown() {
     export HOME="$TEST_DIR/home"
     mkdir -p "$HOME"
 
-    # SHELL=bashで実行
+    # Run with SHELL=bash
     SHELL="/bin/bash" run "$IRIE_DIR/bin/irie-completion" install
 
-    # bash補完ファイルが作成されていること
+    # Verify bash completion file is created
     [ -f "$HOME/.local/share/bash-completion/completions/irie" ]
-    # ファイル内容がcomplete -Fを含むこと
+    # Verify file contains complete -F
     grep -q "complete -F _irie_completions irie" "$HOME/.local/share/bash-completion/completions/irie"
 }
