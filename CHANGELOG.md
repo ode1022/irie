@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.13](https://github.com/ode1022/irie/compare/irie-v1.1.12...irie-v1.1.13) (2026-01-16)
+
+
+### Bug Fixes
+
+* irie remove時のworktree削除を改善 ([25ef1a8](https://github.com/ode1022/irie/commit/25ef1a81e392cdb6bef0fcea2b76507321891b91))
+
 ## [1.1.12](https://github.com/ode1022/irie/compare/irie-v1.1.11...irie-v1.1.12) (2026-01-16)
 
 
