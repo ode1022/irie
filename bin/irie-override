@@ -110,13 +110,15 @@ DB_PREFIX=$(echo "$PROJECT_NAME" | tr '-' '_')
 DB_NAME="${DB_PREFIX}_$(echo "$DIR_NAME" | tr '-' '_')"
 BASE_DOMAIN="${PROJECT_NAME}.localhost"
 
-# モードに応じてFQDNを生成
+# モードに応じてFQDNとWORKTREE_PREFIXを生成
 if [ "$DIR_NAME" = "main" ]; then
     # mainの場合はルートドメイン
     FQDN="${BASE_DOMAIN}"
+    WORKTREE_PREFIX=""
     TRAEFIK_ID="${PROJECT_NAME}"
 else
     FQDN="${DIR_NAME}.${BASE_DOMAIN}"
+    WORKTREE_PREFIX="${DIR_NAME}."
     TRAEFIK_ID="${PROJECT_NAME}-${DIR_NAME}"
 fi
 
@@ -133,6 +135,8 @@ cp "$TEMPLATE_FILE" "$OVERRIDE_FILE"
 # プレースホルダーを置換
 sed_inplace "s/{{DIR_NAME}}/${DIR_NAME}/g" "$OVERRIDE_FILE"
 sed_inplace "s/{{FQDN}}/${FQDN}/g" "$OVERRIDE_FILE"
+sed_inplace "s/{{WORKTREE_PREFIX}}/${WORKTREE_PREFIX}/g" "$OVERRIDE_FILE"
+sed_inplace "s/{{BASE_DOMAIN}}/${BASE_DOMAIN}/g" "$OVERRIDE_FILE"
 sed_inplace "s/{{DB_NAME}}/${DB_NAME}/g" "$OVERRIDE_FILE"
 sed_inplace "s/{{TRAEFIK_ID}}/${TRAEFIK_ID}/g" "$OVERRIDE_FILE"
 
@@ -158,6 +162,8 @@ if [ "$RUN_SETUP" = true ]; then
         export WORKTREE_DIR="$DIR_NAME"
         export WORKTREE_BRANCH="$BRANCH_NAME"
         export WORKTREE_FQDN="$FQDN"
+        export WORKTREE_PREFIX="$WORKTREE_PREFIX"
+        export BASE_DOMAIN="$BASE_DOMAIN"
         export WORKTREE_DB_NAME="$DB_NAME"
         export WORKTREE_SOURCE_DIR="$CURRENT_DIR"
         export WORKTREE_TRAEFIK_ID="$TRAEFIK_ID"
@@ -179,7 +185,10 @@ if [ "$RUN_SETUP" = true ]; then
     if [ -f "post-setup.sh" ]; then
         PROJECT_INFO=$(
             export IRIE_INFO_ONLY=true
+            export WORKTREE_DIR="$DIR_NAME"
             export WORKTREE_FQDN="$FQDN"
+            export WORKTREE_PREFIX="$WORKTREE_PREFIX"
+            export BASE_DOMAIN="$BASE_DOMAIN"
             export WORKTREE_TRAEFIK_ID="$TRAEFIK_ID"
             source "./post-setup.sh" 2>/dev/null || true
             if declare -f irie_info &>/dev/null; then

@@ -171,12 +171,15 @@ SUBDOMAIN=$(echo "$STRIPPED_DIR" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 
 # FQDN生成（--rootフラグがある場合はルートドメインのみ）
 # TRAEFIK_IDはTraefikルーター名に使われるため、プロジェクト名を含めてユニークにする
+# WORKTREE_PREFIXはサブドメイン接頭辞（rootモードは空、通常はドット付き）
 if [ "$USE_ROOT_DOMAIN" = true ]; then
     FQDN="${BASE_DOMAIN}"
+    WORKTREE_PREFIX=""
     # ルートドメインの場合、Traefik用の識別子はプロジェクト名
     TRAEFIK_ID="${PROJECT_NAME}"
 else
     FQDN="${SUBDOMAIN}.${BASE_DOMAIN}"
+    WORKTREE_PREFIX="${SUBDOMAIN}."
     TRAEFIK_ID="${PROJECT_NAME}-${SUBDOMAIN}"
 fi
 
@@ -342,6 +345,8 @@ if [ -f "${WORK_DIR}/post-setup.sh" ]; then
     export WORKTREE_DIR="$DIR_NAME"
     export WORKTREE_BRANCH="$BRANCH_NAME"
     export WORKTREE_FQDN="$FQDN"
+    export WORKTREE_PREFIX="$WORKTREE_PREFIX"
+    export BASE_DOMAIN="$BASE_DOMAIN"
     export WORKTREE_DB_NAME="$DB_NAME"
     export WORKTREE_SEPARATE_DB_NAME="$SEPARATE_DB_NAME"
     export WORKTREE_USE_SEPARATE_DB="$SEPARATE_DB"
