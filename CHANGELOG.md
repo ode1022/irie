@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.12](https://github.com/ode1022/irie/compare/irie-v1.1.11...irie-v1.1.12) (2026-01-16)
+
+
+### Bug Fixes
+
+* irie remove時のworktree/ブランチクリーンアップを改善 ([c31d6bd](https://github.com/ode1022/irie/commit/c31d6bdc2538960c6fe57a9d3dda2d9270a7ae45))
+
 ## [1.1.11](https://github.com/ode1022/irie/compare/irie-v1.1.10...irie-v1.1.11) (2026-01-14)
 
 
