@@ -264,12 +264,17 @@ if [ "$WORKTREE_REALPATH" = "$WORK_DIR_REALPATH" ]; then
 else
     cd "$WORK_DIR"
 fi
-git worktree remove "../$DIR_NAME" --force 2>/dev/null || {
-    echo -e "${YELLOW}  → git worktree removeに失敗、ディレクトリを直接削除${NC}"
-    rm -rf "$WORKTREE_PATH"
-    # 孤立したworktree情報をクリーンアップ
-    git worktree prune
-}
+# 絶対パスでworktreeを削除（相対パスだとカレントディレクトリ依存で失敗する可能性）
+if ! git worktree remove "$WORKTREE_PATH" --force 2>&1; then
+    echo -e "${RED}エラー: git worktree removeに失敗しました${NC}"
+    echo -e "${YELLOW}対象パス: $WORKTREE_PATH${NC}"
+    echo ""
+    echo -e "${YELLOW}手動で確認してください:${NC}"
+    echo "  git worktree list"
+    echo "  git worktree prune  # 孤立したworktree情報を削除"
+    echo "  rm -rf $WORKTREE_PATH  # ディレクトリを手動削除"
+    exit 1
+fi
 echo -e "${GREEN}✓ Worktree削除完了${NC}"
 
 # 4. ブランチ削除
