@@ -267,13 +267,16 @@ fi
 git worktree remove "../$DIR_NAME" --force 2>/dev/null || {
     echo -e "${YELLOW}  → git worktree removeに失敗、ディレクトリを直接削除${NC}"
     rm -rf "$WORKTREE_PATH"
+    # 孤立したworktree情報をクリーンアップ
+    git worktree prune
 }
 echo -e "${GREEN}✓ Worktree削除完了${NC}"
 
 # 4. ブランチ削除
 echo -e "${GREEN}[4/4] ブランチ削除中...${NC}"
 # worktreeに紐づいていたブランチを探す
-BRANCH_NAME=$(git branch --list | grep -E "feat/${DIR_NAME}|${DIR_NAME}" | head -1 | tr -d ' *')
+# +はworktree紐づき、*はカレントブランチを示す記号なので除去
+BRANCH_NAME=$(git branch --list | grep -E "feat/${DIR_NAME}|${DIR_NAME}" | head -1 | tr -d ' *+')
 if [ -n "$BRANCH_NAME" ]; then
     if [ "$FORCE" = true ]; then
         # --force時は強制削除
