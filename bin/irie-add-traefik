@@ -260,11 +260,15 @@ if [ -f "$TEMPLATE_FILE" ]; then
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sed -i '' "s/{{DIR_NAME}}/${DIR_NAME}/g" "$OVERRIDE_FILE"
         sed -i '' "s/{{FQDN}}/${FQDN}/g" "$OVERRIDE_FILE"
+        sed -i '' "s/{{WORKTREE_PREFIX}}/${WORKTREE_PREFIX}/g" "$OVERRIDE_FILE"
+        sed -i '' "s/{{BASE_DOMAIN}}/${BASE_DOMAIN}/g" "$OVERRIDE_FILE"
         sed -i '' "s/{{TRAEFIK_ID}}/${TRAEFIK_ID}/g" "$OVERRIDE_FILE"
         sed -i '' "s/{{DB_NAME}}/${DB_NAME}/g" "$OVERRIDE_FILE"
     else
         sed -i "s/{{DIR_NAME}}/${DIR_NAME}/g" "$OVERRIDE_FILE"
         sed -i "s/{{FQDN}}/${FQDN}/g" "$OVERRIDE_FILE"
+        sed -i "s/{{WORKTREE_PREFIX}}/${WORKTREE_PREFIX}/g" "$OVERRIDE_FILE"
+        sed -i "s/{{BASE_DOMAIN}}/${BASE_DOMAIN}/g" "$OVERRIDE_FILE"
         sed -i "s/{{TRAEFIK_ID}}/${TRAEFIK_ID}/g" "$OVERRIDE_FILE"
         sed -i "s/{{DB_NAME}}/${DB_NAME}/g" "$OVERRIDE_FILE"
     fi
