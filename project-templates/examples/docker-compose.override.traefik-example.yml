@@ -10,7 +10,7 @@
 #
 # アクセスURL（*.localhostはhosts設定不要）:
 #   アプリ:    http://{{FQDN}}/
-#   アプリ(HTTPS): https://{{FQDN}}:8443/
+#   アプリ(HTTPS): https://{{FQDN}}/
 #   Vite:      http://vite-{{FQDN}}/
 #   MinIO:     http://minio-{{FQDN}}/
 #   Mailpit:   http://mailpit-{{FQDN}}/
