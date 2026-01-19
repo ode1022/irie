@@ -1,20 +1,31 @@
 # Traefik方式テンプレート（テスト用）
+#
+# プレースホルダー:
+#   {{DIR_NAME}}        - ディレクトリ名
+#   {{FQDN}}            - 完全修飾ドメイン名
+#   {{WORKTREE_PREFIX}} - サブドメイン接頭辞（rootは空、通常は "dir."）
+#   {{BASE_DOMAIN}}     - ベースドメイン
+#   {{TRAEFIK_ID}}      - Traefikルーター識別子
+#   {{DB_NAME}}         - データベース名
 
 name: sample-project-{{DIR_NAME}}
 
 services:
   nginx:
+    environment:
+      # 新形式のURL（WORKTREE_PREFIX + BASE_DOMAIN）
+      APP_URL: http://{{WORKTREE_PREFIX}}{{BASE_DOMAIN}}
     ports: !override []
     networks:
       - default
       - traefik-network
     labels:
       - "traefik.enable=true"
-      # HTTP
-      - "traefik.http.routers.{{TRAEFIK_ID}}.rule=Host(`{{FQDN}}`)"
+      # HTTP（新形式）
+      - "traefik.http.routers.{{TRAEFIK_ID}}.rule=Host(`{{WORKTREE_PREFIX}}{{BASE_DOMAIN}}`)"
       - "traefik.http.routers.{{TRAEFIK_ID}}.entrypoints=web"
-      # HTTPS
-      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.rule=Host(`{{FQDN}}`)"
+      # HTTPS（新形式）
+      - "traefik.http.routers.{{TRAEFIK_ID}}-secure.rule=Host(`{{WORKTREE_PREFIX}}{{BASE_DOMAIN}}`)"
       - "traefik.http.routers.{{TRAEFIK_ID}}-secure.entrypoints=websecure"
       - "traefik.http.routers.{{TRAEFIK_ID}}-secure.tls=true"
       # Service

@@ -224,6 +224,21 @@ wait_for_http() {
     [ -f "$TEST_WORKTREE_BASE/test-traefik/docker-compose.override.yml" ]
 }
 
+# プレースホルダーが全て置換されている
+@test "Traefik mode: all placeholders are replaced in override.yml" {
+    skip_if_no_worktree "test-traefik"
+
+    OVERRIDE_FILE="$TEST_WORKTREE_BASE/test-traefik/docker-compose.override.yml"
+
+    # 未置換のプレースホルダー（{{...}}）が残っていないことを確認
+    run grep -E '\{\{[A-Z_]+\}\}' "$OVERRIDE_FILE"
+    if [ "$status" -eq 0 ]; then
+        echo "# Unreplaced placeholders found:" >&3
+        echo "$output" >&3
+    fi
+    [ "$status" -ne 0 ]  # grep が見つからない（exit 1）ことを期待
+}
+
 # HTTPでアクセスできる
 @test "Traefik mode: can access via HTTP" {
     skip_if_no_worktree "test-traefik"
