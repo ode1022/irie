@@ -109,11 +109,14 @@ BASE_DOMAIN="${PROJECT_NAME}.localhost"
 SUBDOMAIN=$(echo "$STRIPPED_DIR" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 
 # ルートドメインかサブドメインかを判定
+# WORKTREE_PREFIXはサブドメイン接頭辞（rootモードは空、通常はドット付き）
 if [ "$DIR_NAME" = "main" ] || [ "$DIR_NAME" = "master" ]; then
     FQDN="${BASE_DOMAIN}"
+    WORKTREE_PREFIX=""
     TRAEFIK_ID="${PROJECT_NAME}"
 else
     FQDN="${SUBDOMAIN}.${BASE_DOMAIN}"
+    WORKTREE_PREFIX="${SUBDOMAIN}."
     TRAEFIK_ID="${PROJECT_NAME}-${SUBDOMAIN}"
 fi
 
@@ -171,6 +174,8 @@ if [ -n "$SOURCE_DIR" ] && [ -f "$SOURCE_DIR/post-setup.sh" ]; then
     export WORKTREE_DIR="$DIR_NAME"
     export WORKTREE_BRANCH="$BRANCH_NAME"
     export WORKTREE_FQDN="$FQDN"
+    export WORKTREE_PREFIX="$WORKTREE_PREFIX"
+    export BASE_DOMAIN="$BASE_DOMAIN"
     export WORKTREE_DB_NAME="$DB_NAME"
     export WORKTREE_SOURCE_DIR="$SOURCE_DIR"
     export WORKTREE_TRAEFIK_ID="$TRAEFIK_ID"
