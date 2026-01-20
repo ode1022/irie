@@ -168,6 +168,11 @@ else
     echo -e "${YELLOW}DBモード:${NC} (不明)"
 fi
 
+# Traefikダッシュボード
+echo ""
+echo -e "${BLUE}Traefikダッシュボード:${NC}"
+echo "  http://traefik.localhost/"
+
 # プロジェクト固有情報を取得（irie_info関数があれば）
 if [ -n "$SOURCE_DIR" ] && [ -f "$SOURCE_DIR/post-setup.sh" ]; then
     # 環境変数をエクスポート
