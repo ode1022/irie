@@ -377,6 +377,31 @@ fi
 ### post-cleanup.sh
 共有DB使用時のデータベース削除処理を記述。
 
+サンプルテンプレート（`~/.irie/project-templates/examples/post-cleanup.sh`）を参照し、以下の処理を含める：
+
+#### 1. 専用DBの削除（--separate-db使用時のみ）
+`WORKTREE_USE_SEPARATE_DB` が `true` の場合のみ、メインDBを削除。
+
+#### 2. テストDBの削除
+テストDBは常に専用名（`${WORKTREE_SEPARATE_DB_NAME}_testing`）なので、常に削除。
+
+#### 3. 並列テスト用DBの削除（重要）
+Laravelの `--parallel` オプション等で作成される並列テスト用DB（`_testing_1`, `_testing_2`, ...）を削除：
+
+```bash
+# 並列テスト用DBも削除（_testing_1, _testing_2, ... のパターン）
+PARALLEL_DBS=$(docker exec shared-postgres psql -U root -d postgres -t -A \
+    -c "SELECT datname FROM pg_database WHERE datname LIKE '${WORKTREE_SEPARATE_DB_NAME}_testing_%';" 2>/dev/null || true)
+if [ -n "$PARALLEL_DBS" ]; then
+    for db in $PARALLEL_DBS; do
+        docker exec shared-postgres psql -U root -d postgres \
+            -c "DROP DATABASE IF EXISTS \"$db\";" 2>/dev/null || true
+    done
+fi
+```
+
+MySQL の場合は同様のクエリを MySQL 用に変換する。
+
 ## プロジェクト名
 
 gitリモートURLから取得（推奨）：

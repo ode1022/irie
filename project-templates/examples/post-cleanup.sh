@@ -34,5 +34,19 @@ source "${IRIE_LIB_DIR}/helpers.sh"
 # docker exec shared-postgres psql -U root -d postgres \
 #     -c "DROP DATABASE IF EXISTS ${WORKTREE_SEPARATE_DB_NAME}_testing;" 2>/dev/null || true
 # echo -e "${GREEN}    ✓ ${WORKTREE_SEPARATE_DB_NAME}_testing を削除${NC}"
+#
+# # 並列テスト用DBも削除（_testing_1, _testing_2, ... のパターン）
+# echo -e "${BLUE}  → 並列テスト用DBを削除中...${NC}"
+# PARALLEL_DBS=$(docker exec shared-postgres psql -U root -d postgres -t -A \
+#     -c "SELECT datname FROM pg_database WHERE datname LIKE '${WORKTREE_SEPARATE_DB_NAME}_testing_%';" 2>/dev/null || true)
+# if [ -n "$PARALLEL_DBS" ]; then
+#     for db in $PARALLEL_DBS; do
+#         docker exec shared-postgres psql -U root -d postgres \
+#             -c "DROP DATABASE IF EXISTS \"$db\";" 2>/dev/null || true
+#         echo -e "${GREEN}    ✓ $db を削除${NC}"
+#     done
+# else
+#     echo -e "${GRAY}    (並列テスト用DBなし)${NC}"
+# fi
 
 echo -e "${GREEN}  → post-cleanup.sh 完了${NC}"
