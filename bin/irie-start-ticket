@@ -1,0 +1,187 @@
+#!/bin/bash
+
+# irie start-ticket - チケット情報からブランチを作成しClaude Codeを起動
+# Usage: irie start-ticket "SW_CHIYODA-1048 【全体】Phase4：クーポン機能導入..."
+#        irie start-ticket SW_CHIYODA-1048  # チケット番号のみでもOK
+
+set -e
+
+# カラー出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# irieディレクトリ
+IRIE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+show_help() {
+    cat << 'EOF'
+irie start-ticket - チケット情報からブランチを作成しClaude Codeを起動
+
+使い方:
+  irie start-ticket "<チケット情報>"
+  irie start-ticket <チケット番号>
+
+引数:
+  チケット情報    Backlogチケットの番号とタイトル
+                  例: "SW_CHIYODA-1048 【全体】Phase4：クーポン機能導入..."
+                  例: SW_CHIYODA-1048（番号のみ）
+
+オプション:
+  --dry-run       ブランチ名の決定のみ行い、実際の作成は行わない
+  --no-claude     worktree作成後にClaude Codeを起動しない
+  -h, --help      このヘルプを表示
+
+処理の流れ:
+  1. Claude Codeがチケット情報を解析してブランチ名を決定
+  2. irie add でworktreeを作成
+  3. 作成したworktreeでClaude Codeを起動（チケット情報付き）
+
+例:
+  irie start-ticket "SW_CHIYODA-1048 【全体】Phase4：クーポン機能導入に向けて"
+  irie start-ticket SW-1234 --dry-run
+EOF
+}
+
+# 引数パース
+TICKET_INFO=""
+DRY_RUN=false
+NO_CLAUDE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --no-claude)
+            NO_CLAUDE=true
+            shift
+            ;;
+        *)
+            if [ -z "$TICKET_INFO" ]; then
+                TICKET_INFO="$1"
+            else
+                TICKET_INFO="$TICKET_INFO $1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$TICKET_INFO" ]; then
+    echo -e "${RED}エラー: チケット情報を指定してください${NC}"
+    echo ""
+    show_help
+    exit 1
+fi
+
+# claudeコマンドの存在確認
+if ! command -v claude &> /dev/null; then
+    echo -e "${RED}エラー: claudeコマンドが見つかりません${NC}"
+    echo "Claude Codeをインストールしてください"
+    exit 1
+fi
+
+echo -e "${BLUE}チケット情報:${NC} $TICKET_INFO"
+echo ""
+
+# Claude Codeでブランチ名を決定
+echo -e "${CYAN}ブランチ名を決定中...${NC}"
+
+BRANCH_NAME_PROMPT="以下のチケット情報からGitブランチ名を決定してください。
+
+チケット情報: $TICKET_INFO
+
+ルール:
+- 形式: feat/<チケット番号>-<簡潔な説明>
+- チケット番号はそのまま使用（SW_CHIYODA-1048、SW-1234など）
+- 説明部分は英語でケバブケース（kebab-case）
+- 説明は15文字以内に収める
+- 例: feat/SW_CHIYODA-1048-coupon-rank
+
+ブランチ名のみを出力してください（説明や前置き不要）。"
+
+BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" --allowedTools "" 2>/dev/null | tr -d '[:space:]')
+
+if [ -z "$BRANCH_NAME" ]; then
+    echo -e "${RED}エラー: ブランチ名の決定に失敗しました${NC}"
+    exit 1
+fi
+
+# ブランチ名の検証（feat/で始まるか）
+if [[ ! "$BRANCH_NAME" =~ ^feat/ ]]; then
+    echo -e "${YELLOW}警告: ブランチ名がfeat/で始まっていません: $BRANCH_NAME${NC}"
+    echo -e "${YELLOW}feat/を付加します${NC}"
+    BRANCH_NAME="feat/$BRANCH_NAME"
+fi
+
+echo -e "${GREEN}決定したブランチ名:${NC} $BRANCH_NAME"
+echo ""
+
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}--dry-run: 実際の作成は行いません${NC}"
+    exit 0
+fi
+
+# irie addでworktreeを作成
+echo -e "${CYAN}worktreeを作成中...${NC}"
+WORKTREE_OUTPUT=$(irie add "$BRANCH_NAME" 2>&1) || {
+    echo -e "${RED}エラー: worktreeの作成に失敗しました${NC}"
+    echo "$WORKTREE_OUTPUT"
+    exit 1
+}
+
+echo "$WORKTREE_OUTPUT"
+
+# worktreeのパスを取得（irie addの出力またはgit worktree listから）
+# ブランチ名からディレクトリ名を推測（feat/SW_CHIYODA-1048-xxx → SW_CHIYODA-1048-xxx）
+DIR_NAME="${BRANCH_NAME#feat/}"
+
+# カレントディレクトリがbare構成のルートかworktree内かを判定
+if [ -d ".bare" ]; then
+    WORKTREE_PATH="$(pwd)/$DIR_NAME"
+elif [ -d "../.bare" ]; then
+    WORKTREE_PATH="$(dirname "$(pwd)")/$DIR_NAME"
+else
+    # 通常のgitリポジトリの場合
+    WORKTREE_PATH=$(git worktree list --porcelain | grep -A2 "worktree.*$DIR_NAME" | head -1 | sed 's/worktree //')
+fi
+
+if [ ! -d "$WORKTREE_PATH" ]; then
+    echo -e "${YELLOW}警告: worktreeパスの自動検出に失敗しました${NC}"
+    echo -e "${YELLOW}手動でディレクトリに移動してclaudeを起動してください${NC}"
+    exit 0
+fi
+
+echo ""
+echo -e "${GREEN}worktree作成完了:${NC} $WORKTREE_PATH"
+
+if [ "$NO_CLAUDE" = true ]; then
+    echo ""
+    echo -e "${YELLOW}--no-claude: Claude Codeは起動しません${NC}"
+    echo -e "手動で起動する場合: cd $WORKTREE_PATH && claude"
+    exit 0
+fi
+
+# 新しいworktreeでClaude Codeを起動
+echo ""
+echo -e "${CYAN}Claude Codeを起動中...${NC}"
+
+cd "$WORKTREE_PATH"
+
+# チケット情報を渡してClaude Codeを起動
+CLAUDE_PROMPT="チケット対応を開始します。
+
+チケット情報: $TICKET_INFO
+
+まずチケット内容を確認し、作業計画を立ててください。"
+
+exec claude "$CLAUDE_PROMPT"

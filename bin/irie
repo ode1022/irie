@@ -33,6 +33,7 @@ irie - Git Worktree + Docker 並行開発ツール
   config                設定の表示・変更
   init                  Claude Codeでプロジェクト用テンプレートを生成
   override <mode>       テンプレートからdocker-compose.override.ymlを生成
+  start-ticket <info>   チケット情報からブランチ作成＆Claude Code起動
   update                irieを最新版に更新
   shell-init            シェル統合スクリプトを出力（irie cd用）
   completion            シェル補完スクリプトを出力
@@ -120,6 +121,10 @@ case "${1:-}" in
     override)
         shift
         exec "$IRIE_DIR/bin/irie-override" "$@"
+        ;;
+    start-ticket)
+        shift
+        exec "$IRIE_DIR/bin/irie-start-ticket" "$@"
         ;;
     update)
         shift
