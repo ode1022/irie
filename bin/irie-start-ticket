@@ -110,10 +110,11 @@ URL: $TICKET_URL
 
 ブランチ名のルール:
 - 形式: feat/<チケットキー>-<簡潔な説明>
-- チケットキーはURLから抽出したものをそのまま使用
+- 全て小文字で統一（Dockerイメージ名に使われるため大文字不可）
+- チケットキーのアンダースコアはハイフンに変換（SW_CHIYODA → sw-chiyoda）
 - 説明部分は英語でケバブケース（kebab-case）
 - 説明は15文字以内に収める
-- 例: feat/SW_CHIYODA-1048-coupon-rank, feat/repo#123-fix-bug
+- 例: feat/sw-chiyoda-1048-coupon-rank, feat/repo-123-fix-bug
 
 最終的にブランチ名のみを出力してください（説明や前置き不要）。"
 
