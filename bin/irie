@@ -27,7 +27,6 @@ irie - Git Worktree + Docker 並行開発ツール
   add <branch>          worktree作成（Traefik + 共有DB方式）
   remove <branch>       worktree削除
   list                  worktree一覧表示
-  status                各worktreeのgit状態を表示
   cd <name>             worktreeディレクトリに移動（shell-init必須）
   open [name]           worktreeをエディタで開く
   info                  worktree情報表示
@@ -53,7 +52,6 @@ irie - Git Worktree + Docker 並行開発ツール
   irie add main --root                   # ルートworktree
   irie remove app1 --force
   irie list                              # worktree一覧
-  irie status                            # 各worktreeの状態
   irie cd                                # fzf/pecoで選択して移動
   irie cd app1                           # app1 worktreeに移動
   irie info
@@ -106,10 +104,6 @@ case "${1:-}" in
     list)
         shift
         exec "$IRIE_DIR/bin/irie-list" "$@"
-        ;;
-    status)
-        shift
-        exec "$IRIE_DIR/bin/irie-status" "$@"
         ;;
     info)
         shift

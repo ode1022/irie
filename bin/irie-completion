@@ -57,7 +57,7 @@ _irie_completions() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="clone convert add remove list status cd open info config init update override shell-init completion help version"
+    local commands="clone convert add remove list cd open info config init update override shell-init completion help version"
     local add_opts="--base --root --separate-db --help"
 
     # プロジェクトルートを探す関数
@@ -128,9 +128,6 @@ _irie_completions() {
                 list)
                     COMPREPLY=($(compgen -W "--path --name --help" -- "${cur}"))
                     ;;
-                status)
-                    COMPREPLY=($(compgen -W "--verbose --help" -- "${cur}"))
-                    ;;
                 shell-init)
                     COMPREPLY=($(compgen -W "bash zsh" -- "${cur}"))
                     ;;
@@ -188,7 +185,6 @@ _irie() {
         'add:worktree作成（Traefik + 共有DB方式）'
         'remove:worktree削除'
         'list:worktree一覧表示'
-        'status:各worktreeのgit状態を表示'
         'cd:worktreeディレクトリに移動'
         'open:worktreeをエディタで開く'
         'info:worktree情報表示'
@@ -329,12 +325,6 @@ _irie() {
                         '--path[パスのみ表示]' \
                         '-n[名前のみ表示]' \
                         '--name[名前のみ表示]' \
-                        '--help[ヘルプを表示]'
-                    ;;
-                status)
-                    _arguments \
-                        '-v[詳細表示]' \
-                        '--verbose[詳細表示]' \
                         '--help[ヘルプを表示]'
                     ;;
                 shell-init)
