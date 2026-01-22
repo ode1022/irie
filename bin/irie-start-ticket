@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# irie start-ticket - BacklogチケットURLからブランチを作成しClaude Codeを起動
-# Usage: irie start-ticket <backlog-url>
-#        irie start-ticket https://xxx.backlog.com/view/SW_CHIYODA-1048
+# irie start-ticket - チケットURLからブランチを作成しClaude Codeを起動
+# 対応チケットシステム: Backlog, GitHub Issues, GitLab Issues, Jira, Linear
 
 set -e
 
@@ -19,14 +18,20 @@ IRIE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 show_help() {
     cat << 'EOF'
-irie start-ticket - BacklogチケットURLからブランチを作成しClaude Codeを起動
+irie start-ticket - チケットURLからブランチを作成しClaude Codeを起動
 
 使い方:
-  irie start-ticket <backlog-url>
+  irie start-ticket <ticket-url>
 
 引数:
-  backlog-url     BacklogチケットのURL
-                  例: https://xxx.backlog.com/view/SW_CHIYODA-1048
+  ticket-url      チケットのURL（以下のシステムに対応）
+
+対応チケットシステム:
+  Backlog         https://xxx.backlog.com/view/PROJECT-123
+  GitHub Issues   https://github.com/owner/repo/issues/123
+  GitLab Issues   https://gitlab.com/owner/repo/-/issues/123
+  Jira            https://xxx.atlassian.net/browse/PROJECT-123
+  Linear          https://linear.app/team/issue/TEAM-123
 
 オプション:
   --dry-run       ブランチ名の決定のみ行い、実際の作成は行わない
@@ -34,16 +39,216 @@ irie start-ticket - BacklogチケットURLからブランチを作成しClaude C
   -h, --help      このヘルプを表示
 
 処理の流れ:
-  1. URLからチケットキーを抽出
-  2. Claude CodeがBacklog MCPでチケット詳細を取得
+  1. URLからチケットシステムとチケットキーを特定
+  2. Claude Codeが適切なツール/APIでチケット詳細を取得
   3. チケット内容を解析してブランチ名を決定
   4. irie add でworktreeを作成
   5. 作成したworktreeでClaude Codeを起動（チケット情報付き）
 
 例:
   irie start-ticket https://activert.backlog.com/view/SW_CHIYODA-1048
-  irie start-ticket https://activert.backlog.com/view/SW-1234 --dry-run
+  irie start-ticket https://github.com/owner/repo/issues/123
+  irie start-ticket https://xxx.atlassian.net/browse/PROJ-456 --dry-run
 EOF
+}
+
+# チケットシステムを判別してチケットキーを抽出
+detect_ticket_system() {
+    local url="$1"
+
+    # Backlog: xxx.backlog.com/view/PROJECT-123 or xxx.backlog.jp/view/PROJECT-123
+    if [[ "$url" =~ backlog\.(com|jp)/view/([A-Z_]+-[0-9]+) ]]; then
+        TICKET_SYSTEM="backlog"
+        TICKET_KEY="${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    # GitHub Issues: github.com/owner/repo/issues/123
+    if [[ "$url" =~ github\.com/([^/]+)/([^/]+)/issues/([0-9]+) ]]; then
+        TICKET_SYSTEM="github"
+        GITHUB_OWNER="${BASH_REMATCH[1]}"
+        GITHUB_REPO="${BASH_REMATCH[2]}"
+        GITHUB_ISSUE_NUM="${BASH_REMATCH[3]}"
+        TICKET_KEY="${GITHUB_REPO}#${GITHUB_ISSUE_NUM}"
+        return 0
+    fi
+
+    # GitLab Issues: gitlab.com/owner/repo/-/issues/123 (self-hosted も対応)
+    if [[ "$url" =~ ([^/]+)/([^/]+)/-/issues/([0-9]+) ]]; then
+        TICKET_SYSTEM="gitlab"
+        GITLAB_PROJECT="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        GITLAB_ISSUE_NUM="${BASH_REMATCH[3]}"
+        TICKET_KEY="${BASH_REMATCH[2]}#${GITLAB_ISSUE_NUM}"
+        return 0
+    fi
+
+    # Jira: xxx.atlassian.net/browse/PROJECT-123
+    if [[ "$url" =~ atlassian\.net/browse/([A-Z]+-[0-9]+) ]]; then
+        TICKET_SYSTEM="jira"
+        TICKET_KEY="${BASH_REMATCH[1]}"
+        return 0
+    fi
+
+    # Linear: linear.app/team/issue/TEAM-123
+    if [[ "$url" =~ linear\.app/([^/]+)/issue/([A-Z]+-[0-9]+) ]]; then
+        TICKET_SYSTEM="linear"
+        LINEAR_TEAM="${BASH_REMATCH[1]}"
+        TICKET_KEY="${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    return 1
+}
+
+# チケットシステムごとのClaude Code用プロンプトを生成
+generate_branch_prompt() {
+    local ticket_key="$1"
+
+    case "$TICKET_SYSTEM" in
+        backlog)
+            cat << EOF
+以下のBacklogチケットからGitブランチ名を決定してください。
+
+チケットキー: $ticket_key
+
+手順:
+1. mcp__backlog__get_issue ツールを使ってチケット情報を取得（issueIdOrKeyに「$ticket_key」を指定）
+2. チケットのタイトルと内容を確認
+3. 以下のルールに従ってブランチ名を決定
+EOF
+            ;;
+        github)
+            cat << EOF
+以下のGitHub Issueからブランチ名を決定してください。
+
+リポジトリ: $GITHUB_OWNER/$GITHUB_REPO
+Issue番号: #$GITHUB_ISSUE_NUM
+
+手順:
+1. gh issue view $GITHUB_ISSUE_NUM --repo $GITHUB_OWNER/$GITHUB_REPO コマンドでIssue情報を取得
+2. Issueのタイトルと内容を確認
+3. 以下のルールに従ってブランチ名を決定
+EOF
+            ;;
+        gitlab)
+            cat << EOF
+以下のGitLab Issueからブランチ名を決定してください。
+
+プロジェクト: $GITLAB_PROJECT
+Issue番号: #$GITLAB_ISSUE_NUM
+URL: $TICKET_URL
+
+手順:
+1. WebFetchツールでURLからIssue情報を取得（または glab issue view $GITLAB_ISSUE_NUM コマンドがあれば使用）
+2. Issueのタイトルと内容を確認
+3. 以下のルールに従ってブランチ名を決定
+EOF
+            ;;
+        jira)
+            cat << EOF
+以下のJiraチケットからブランチ名を決定してください。
+
+チケットキー: $ticket_key
+URL: $TICKET_URL
+
+手順:
+1. Jira MCPツールがあれば使用、なければWebFetchツールでURLから情報を取得
+2. チケットのタイトルと内容を確認
+3. 以下のルールに従ってブランチ名を決定
+EOF
+            ;;
+        linear)
+            cat << EOF
+以下のLinear Issueからブランチ名を決定してください。
+
+チーム: $LINEAR_TEAM
+Issue: $ticket_key
+URL: $TICKET_URL
+
+手順:
+1. Linear MCPツールがあれば使用、なければWebFetchツールでURLから情報を取得
+2. Issueのタイトルと内容を確認
+3. 以下のルールに従ってブランチ名を決定
+EOF
+            ;;
+    esac
+
+    # 共通のブランチ名ルール
+    cat << EOF
+
+ブランチ名のルール:
+- 形式: feat/<チケットキー>-<簡潔な説明>
+- チケットキーはそのまま使用（$ticket_key）
+- 説明部分は英語でケバブケース（kebab-case）
+- 説明は15文字以内に収める
+- 例: feat/$ticket_key-add-feature
+
+最終的にブランチ名のみを出力してください（説明や前置き不要）。
+EOF
+}
+
+# チケットシステムごとのClaude Code起動プロンプトを生成
+generate_claude_prompt() {
+    case "$TICKET_SYSTEM" in
+        backlog)
+            cat << EOF
+チケット対応を開始します。
+
+チケットURL: $TICKET_URL
+チケットキー: $TICKET_KEY
+
+まずBacklog MCPのmcp__backlog__get_issueツールでチケット詳細を取得し、
+作業内容を確認してから作業計画を立ててください。
+EOF
+            ;;
+        github)
+            cat << EOF
+チケット対応を開始します。
+
+Issue URL: $TICKET_URL
+リポジトリ: $GITHUB_OWNER/$GITHUB_REPO
+Issue番号: #$GITHUB_ISSUE_NUM
+
+まず gh issue view $GITHUB_ISSUE_NUM --repo $GITHUB_OWNER/$GITHUB_REPO でIssue詳細を取得し、
+作業内容を確認してから作業計画を立ててください。
+EOF
+            ;;
+        gitlab)
+            cat << EOF
+チケット対応を開始します。
+
+Issue URL: $TICKET_URL
+プロジェクト: $GITLAB_PROJECT
+Issue番号: #$GITLAB_ISSUE_NUM
+
+まずIssue詳細を取得し（glab CLIまたはWebFetch）、
+作業内容を確認してから作業計画を立ててください。
+EOF
+            ;;
+        jira)
+            cat << EOF
+チケット対応を開始します。
+
+チケットURL: $TICKET_URL
+チケットキー: $TICKET_KEY
+
+まずJiraチケット詳細を取得し（Jira MCPまたはWebFetch）、
+作業内容を確認してから作業計画を立ててください。
+EOF
+            ;;
+        linear)
+            cat << EOF
+チケット対応を開始します。
+
+Issue URL: $TICKET_URL
+チーム: $LINEAR_TEAM
+Issue: $TICKET_KEY
+
+まずLinear Issue詳細を取得し（Linear MCPまたはWebFetch）、
+作業内容を確認してから作業計画を立ててください。
+EOF
+            ;;
+    esac
 }
 
 # 引数パース
@@ -75,23 +280,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$TICKET_URL" ]; then
-    echo -e "${RED}エラー: BacklogチケットURLを指定してください${NC}"
+    echo -e "${RED}エラー: チケットURLを指定してください${NC}"
     echo ""
     show_help
     exit 1
 fi
 
-# URLからチケットキーを抽出
-# 例: https://xxx.backlog.com/view/SW_CHIYODA-1048 → SW_CHIYODA-1048
-if [[ "$TICKET_URL" =~ /view/([A-Z_]+-[0-9]+) ]]; then
-    TICKET_KEY="${BASH_REMATCH[1]}"
-elif [[ "$TICKET_URL" =~ ^([A-Z_]+-[0-9]+)$ ]]; then
-    # URLではなくチケットキーが直接渡された場合
-    TICKET_KEY="$TICKET_URL"
-else
-    echo -e "${RED}エラー: URLからチケットキーを抽出できませんでした${NC}"
+# チケットシステムを判別
+if ! detect_ticket_system "$TICKET_URL"; then
+    echo -e "${RED}エラー: 対応していないURLフォーマットです${NC}"
     echo "URL: $TICKET_URL"
-    echo "期待する形式: https://xxx.backlog.com/view/PROJECT-123"
+    echo ""
+    echo "対応フォーマット:"
+    echo "  Backlog:  https://xxx.backlog.com/view/PROJECT-123"
+    echo "  GitHub:   https://github.com/owner/repo/issues/123"
+    echo "  GitLab:   https://gitlab.com/owner/repo/-/issues/123"
+    echo "  Jira:     https://xxx.atlassian.net/browse/PROJECT-123"
+    echo "  Linear:   https://linear.app/team/issue/TEAM-123"
     exit 1
 fi
 
@@ -102,30 +307,15 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
+echo -e "${BLUE}チケットシステム:${NC} $TICKET_SYSTEM"
 echo -e "${BLUE}チケットURL:${NC} $TICKET_URL"
 echo -e "${BLUE}チケットキー:${NC} $TICKET_KEY"
 echo ""
 
-# Claude Codeでブランチ名を決定（Backlog MCPでチケット情報を取得）
+# Claude Codeでブランチ名を決定
 echo -e "${CYAN}チケット情報を取得してブランチ名を決定中...${NC}"
 
-BRANCH_NAME_PROMPT="以下のBacklogチケットからGitブランチ名を決定してください。
-
-チケットキー: $TICKET_KEY
-
-手順:
-1. mcp__backlog__get_issue ツールを使ってチケット情報を取得（issueIdOrKeyに「$TICKET_KEY」を指定）
-2. チケットのタイトルと内容を確認
-3. 以下のルールに従ってブランチ名を決定
-
-ブランチ名のルール:
-- 形式: feat/<チケットキー>-<簡潔な説明>
-- チケットキーはそのまま使用（$TICKET_KEY）
-- 説明部分は英語でケバブケース（kebab-case）
-- 説明は15文字以内に収める
-- 例: feat/SW_CHIYODA-1048-coupon-rank
-
-最終的にブランチ名のみを出力してください（説明や前置き不要）。"
+BRANCH_NAME_PROMPT=$(generate_branch_prompt "$TICKET_KEY")
 
 BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" 2>/dev/null | tail -1 | tr -d '[:space:]')
 
@@ -159,8 +349,7 @@ WORKTREE_OUTPUT=$(irie add "$BRANCH_NAME" 2>&1) || {
 
 echo "$WORKTREE_OUTPUT"
 
-# worktreeのパスを取得（irie addの出力またはgit worktree listから）
-# ブランチ名からディレクトリ名を推測（feat/SW_CHIYODA-1048-xxx → SW_CHIYODA-1048-xxx）
+# worktreeのパスを取得
 DIR_NAME="${BRANCH_NAME#feat/}"
 
 # カレントディレクトリがbare構成のルートかworktree内かを判定
@@ -195,13 +384,6 @@ echo -e "${CYAN}Claude Codeを起動中...${NC}"
 
 cd "$WORKTREE_PATH"
 
-# チケット情報を渡してClaude Codeを起動
-CLAUDE_PROMPT="チケット対応を開始します。
-
-チケットURL: $TICKET_URL
-チケットキー: $TICKET_KEY
-
-まずBacklog MCPのmcp__backlog__get_issueツールでチケット詳細を取得し、
-作業内容を確認してから作業計画を立ててください。"
+CLAUDE_PROMPT=$(generate_claude_prompt)
 
 exec claude "$CLAUDE_PROMPT"
