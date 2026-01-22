@@ -97,13 +97,14 @@ BRANCH_NAME_PROMPT="以下のURLからチケット情報を取得し、Gitブラ
 URL: $TICKET_URL
 
 手順:
-1. URLからチケットシステムを判別（Backlog, GitHub, GitLab, Jira, Linear等）
-2. 適切な方法でチケット情報を取得:
+1. URLからチケットシステムを判別
+2. 適切な方法でチケット情報を取得（MCPやCLIを優先、認証が必要なのでWebFetchは基本使えない）:
    - Backlog: mcp__backlog__get_issue を使用
    - GitHub: gh issue view コマンドを使用
-   - GitLab: glab issue view または WebFetch を使用
-   - Jira: Jira MCP または WebFetch を使用
-   - その他: WebFetch を使用
+   - GitLab: glab issue view コマンドを使用
+   - Jira: Jira MCPを使用
+   - Linear: Linear MCPを使用
+   - その他: 対応するMCPまたはCLIを探して使用
 3. チケットのタイトルと内容を確認
 4. 以下のルールに従ってブランチ名を決定
 
