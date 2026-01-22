@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# irie start-ticket - チケット情報からブランチを作成しClaude Codeを起動
-# Usage: irie start-ticket "SW_CHIYODA-1048 【全体】Phase4：クーポン機能導入..."
-#        irie start-ticket SW_CHIYODA-1048  # チケット番号のみでもOK
+# irie start-ticket - BacklogチケットURLからブランチを作成しClaude Codeを起動
+# Usage: irie start-ticket <backlog-url>
+#        irie start-ticket https://xxx.backlog.com/view/SW_CHIYODA-1048
 
 set -e
 
@@ -19,16 +19,14 @@ IRIE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 show_help() {
     cat << 'EOF'
-irie start-ticket - チケット情報からブランチを作成しClaude Codeを起動
+irie start-ticket - BacklogチケットURLからブランチを作成しClaude Codeを起動
 
 使い方:
-  irie start-ticket "<チケット情報>"
-  irie start-ticket <チケット番号>
+  irie start-ticket <backlog-url>
 
 引数:
-  チケット情報    Backlogチケットの番号とタイトル
-                  例: "SW_CHIYODA-1048 【全体】Phase4：クーポン機能導入..."
-                  例: SW_CHIYODA-1048（番号のみ）
+  backlog-url     BacklogチケットのURL
+                  例: https://xxx.backlog.com/view/SW_CHIYODA-1048
 
 オプション:
   --dry-run       ブランチ名の決定のみ行い、実際の作成は行わない
@@ -36,18 +34,20 @@ irie start-ticket - チケット情報からブランチを作成しClaude Code�
   -h, --help      このヘルプを表示
 
 処理の流れ:
-  1. Claude Codeがチケット情報を解析してブランチ名を決定
-  2. irie add でworktreeを作成
-  3. 作成したworktreeでClaude Codeを起動（チケット情報付き）
+  1. URLからチケットキーを抽出
+  2. Claude CodeがBacklog MCPでチケット詳細を取得
+  3. チケット内容を解析してブランチ名を決定
+  4. irie add でworktreeを作成
+  5. 作成したworktreeでClaude Codeを起動（チケット情報付き）
 
 例:
-  irie start-ticket "SW_CHIYODA-1048 【全体】Phase4：クーポン機能導入に向けて"
-  irie start-ticket SW-1234 --dry-run
+  irie start-ticket https://activert.backlog.com/view/SW_CHIYODA-1048
+  irie start-ticket https://activert.backlog.com/view/SW-1234 --dry-run
 EOF
 }
 
 # 引数パース
-TICKET_INFO=""
+TICKET_URL=""
 DRY_RUN=false
 NO_CLAUDE=false
 
@@ -66,20 +66,32 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            if [ -z "$TICKET_INFO" ]; then
-                TICKET_INFO="$1"
-            else
-                TICKET_INFO="$TICKET_INFO $1"
+            if [ -z "$TICKET_URL" ]; then
+                TICKET_URL="$1"
             fi
             shift
             ;;
     esac
 done
 
-if [ -z "$TICKET_INFO" ]; then
-    echo -e "${RED}エラー: チケット情報を指定してください${NC}"
+if [ -z "$TICKET_URL" ]; then
+    echo -e "${RED}エラー: BacklogチケットURLを指定してください${NC}"
     echo ""
     show_help
+    exit 1
+fi
+
+# URLからチケットキーを抽出
+# 例: https://xxx.backlog.com/view/SW_CHIYODA-1048 → SW_CHIYODA-1048
+if [[ "$TICKET_URL" =~ /view/([A-Z_]+-[0-9]+) ]]; then
+    TICKET_KEY="${BASH_REMATCH[1]}"
+elif [[ "$TICKET_URL" =~ ^([A-Z_]+-[0-9]+)$ ]]; then
+    # URLではなくチケットキーが直接渡された場合
+    TICKET_KEY="$TICKET_URL"
+else
+    echo -e "${RED}エラー: URLからチケットキーを抽出できませんでした${NC}"
+    echo "URL: $TICKET_URL"
+    echo "期待する形式: https://xxx.backlog.com/view/PROJECT-123"
     exit 1
 fi
 
@@ -90,26 +102,32 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
-echo -e "${BLUE}チケット情報:${NC} $TICKET_INFO"
+echo -e "${BLUE}チケットURL:${NC} $TICKET_URL"
+echo -e "${BLUE}チケットキー:${NC} $TICKET_KEY"
 echo ""
 
-# Claude Codeでブランチ名を決定
-echo -e "${CYAN}ブランチ名を決定中...${NC}"
+# Claude Codeでブランチ名を決定（Backlog MCPでチケット情報を取得）
+echo -e "${CYAN}チケット情報を取得してブランチ名を決定中...${NC}"
 
-BRANCH_NAME_PROMPT="以下のチケット情報からGitブランチ名を決定してください。
+BRANCH_NAME_PROMPT="以下のBacklogチケットからGitブランチ名を決定してください。
 
-チケット情報: $TICKET_INFO
+チケットキー: $TICKET_KEY
 
-ルール:
-- 形式: feat/<チケット番号>-<簡潔な説明>
-- チケット番号はそのまま使用（SW_CHIYODA-1048、SW-1234など）
+手順:
+1. mcp__backlog__get_issue ツールを使ってチケット情報を取得（issueIdOrKeyに「$TICKET_KEY」を指定）
+2. チケットのタイトルと内容を確認
+3. 以下のルールに従ってブランチ名を決定
+
+ブランチ名のルール:
+- 形式: feat/<チケットキー>-<簡潔な説明>
+- チケットキーはそのまま使用（$TICKET_KEY）
 - 説明部分は英語でケバブケース（kebab-case）
 - 説明は15文字以内に収める
 - 例: feat/SW_CHIYODA-1048-coupon-rank
 
-ブランチ名のみを出力してください（説明や前置き不要）。"
+最終的にブランチ名のみを出力してください（説明や前置き不要）。"
 
-BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" --allowedTools "" 2>/dev/null | tr -d '[:space:]')
+BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" 2>/dev/null | tail -1 | tr -d '[:space:]')
 
 if [ -z "$BRANCH_NAME" ]; then
     echo -e "${RED}エラー: ブランチ名の決定に失敗しました${NC}"
@@ -180,8 +198,10 @@ cd "$WORKTREE_PATH"
 # チケット情報を渡してClaude Codeを起動
 CLAUDE_PROMPT="チケット対応を開始します。
 
-チケット情報: $TICKET_INFO
+チケットURL: $TICKET_URL
+チケットキー: $TICKET_KEY
 
-まずチケット内容を確認し、作業計画を立ててください。"
+まずBacklog MCPのmcp__backlog__get_issueツールでチケット詳細を取得し、
+作業内容を確認してから作業計画を立ててください。"
 
 exec claude "$CLAUDE_PROMPT"
