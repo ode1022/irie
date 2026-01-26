@@ -58,7 +58,8 @@ copy_if_exists "${WORKTREE_SOURCE_DIR}/.env" "./.env"
 # #   1. mainブランチの場合（最初のセットアップ）
 # #   2. --separate-db指定の場合（専用DB）
 # #   3. DBが存在しない場合（安全策）
-# should_init_db "postgres" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
+# postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
+# should_init_db "$DB_EXISTS"
 #
 # if [ "$SHOULD_INIT_DB" = "true" ]; then
 #     docker exec "$DB_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE ${WORKTREE_DB_NAME};" 2>/dev/null || true

@@ -81,18 +81,17 @@ mysql_db_exists() {
 }
 
 # DB初期化が必要かどうかを判定し、SHOULD_INIT_DB変数を設定
-# 引数: $1=db_type (postgres|mysql), $2=container, $3=db_name, $4=user (optional), $5=password (optional)
+# 引数: $1=db_exists (true|false) - DBが存在するかどうか
 # 結果: SHOULD_INIT_DB変数に true/false を設定
 # 判定条件:
 #   1. mainブランチの場合（最初のセットアップ）
 #   2. --separate-db指定の場合（専用DB）
 #   3. DBが存在しない場合（安全策）
+# 使用例:
+#   postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
+#   should_init_db "$DB_EXISTS"
 should_init_db() {
-    local db_type="$1"
-    local container="$2"
-    local db_name="$3"
-    local user="${4:-root}"
-    local password="${5:-}"
+    local db_exists="${1:-false}"
 
     SHOULD_INIT_DB=false
 
@@ -102,28 +101,11 @@ should_init_db() {
     elif [ "$WORKTREE_USE_SEPARATE_DB" = "true" ]; then
         SHOULD_INIT_DB=true
         echo -e "${BLUE}  → 専用DBモードのためDB初期化を実行${NC}"
+    elif [ "$db_exists" != "true" ]; then
+        SHOULD_INIT_DB=true
+        echo -e "${BLUE}  → DBが存在しないためDB初期化を実行${NC}"
     else
-        # DB存在チェック
-        local db_exists=false
-        case "$db_type" in
-            postgres)
-                if postgres_db_exists "$container" "$db_name" "$user" "$password"; then
-                    db_exists=true
-                fi
-                ;;
-            mysql)
-                if mysql_db_exists "$container" "$db_name" "$user" "${password:-root}"; then
-                    db_exists=true
-                fi
-                ;;
-        esac
-
-        if [ "$db_exists" = "false" ]; then
-            SHOULD_INIT_DB=true
-            echo -e "${BLUE}  → DBが存在しないためDB初期化を実行${NC}"
-        else
-            echo -e "${BLUE}  → mainと同じDBを使用（マイグレーション・シーダーをスキップ）${NC}"
-        fi
+        echo -e "${BLUE}  → mainと同じDBを使用（マイグレーション・シーダーをスキップ）${NC}"
     fi
 }
 

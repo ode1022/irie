@@ -334,12 +334,21 @@ app:
   3. DBが存在しない場合
 
 ```bash
+# DB存在チェック関数（helpers.shで提供）
+# postgres_db_exists <container> <db_name> [user] [password]
+# mysql_db_exists <container> <db_name> [user] [password]
+
 # DB初期化判定関数（helpers.shで提供）
-# should_init_db <db_type> <container> <db_name> [user] [password]
+# should_init_db <db_exists>  # "true" or "false"
 # 結果: SHOULD_INIT_DB変数に true/false を設定
-should_init_db "postgres" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
-# または
-should_init_db "mysql" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
+
+# PostgreSQLの場合
+postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
+should_init_db "$DB_EXISTS"
+
+# MySQLの場合
+mysql_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
+should_init_db "$DB_EXISTS"
 ```
 
 #### 4. 依存関係について（post-setup.shでは不要）
@@ -367,8 +376,8 @@ volumes:
 
 ```bash
 # DB初期化判定（should_init_db関数がSHOULD_INIT_DB変数を設定）
-should_init_db "postgres" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
-# MySQLの場合: should_init_db "mysql" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
+postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
+should_init_db "$DB_EXISTS"
 
 # DB作成・マイグレーション
 if [ "$SHOULD_INIT_DB" = "true" ]; then
