@@ -59,8 +59,14 @@ postgres_db_exists() {
     local container="$1"
     local db_name="$2"
     local user="${3:-root}"
-    docker exec "$container" psql -U "$user" -d postgres -tAc \
-        "SELECT 1 FROM pg_database WHERE datname = '${db_name}'" 2>/dev/null | grep -q "1"
+    local password="${4:-}"
+    if [ -n "$password" ]; then
+        docker exec "$container" env PGPASSWORD="$password" psql -U "$user" -d postgres -tAc \
+            "SELECT 1 FROM pg_database WHERE datname = '${db_name}'" 2>/dev/null | grep -q "1"
+    else
+        docker exec "$container" psql -U "$user" -d postgres -tAc \
+            "SELECT 1 FROM pg_database WHERE datname = '${db_name}'" 2>/dev/null | grep -q "1"
+    fi
 }
 
 # MySQLでDBが存在するかチェック
@@ -72,6 +78,53 @@ mysql_db_exists() {
     local password="${4:-root}"
     docker exec "$container" mysql -u"$user" -p"$password" -e \
         "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${db_name}';" 2>/dev/null | grep -q "$db_name"
+}
+
+# DB初期化が必要かどうかを判定し、SHOULD_INIT_DB変数を設定
+# 引数: $1=db_type (postgres|mysql), $2=container, $3=db_name, $4=user (optional), $5=password (optional)
+# 結果: SHOULD_INIT_DB変数に true/false を設定
+# 判定条件:
+#   1. mainブランチの場合（最初のセットアップ）
+#   2. --separate-db指定の場合（専用DB）
+#   3. DBが存在しない場合（安全策）
+should_init_db() {
+    local db_type="$1"
+    local container="$2"
+    local db_name="$3"
+    local user="${4:-root}"
+    local password="${5:-}"
+
+    SHOULD_INIT_DB=false
+
+    if [ "$WORKTREE_DIR" = "main" ] || [ "$WORKTREE_DIR" = "master" ]; then
+        SHOULD_INIT_DB=true
+        echo -e "${BLUE}  → mainブランチのためDB初期化を実行${NC}"
+    elif [ "$WORKTREE_USE_SEPARATE_DB" = "true" ]; then
+        SHOULD_INIT_DB=true
+        echo -e "${BLUE}  → 専用DBモードのためDB初期化を実行${NC}"
+    else
+        # DB存在チェック
+        local db_exists=false
+        case "$db_type" in
+            postgres)
+                if postgres_db_exists "$container" "$db_name" "$user" "$password"; then
+                    db_exists=true
+                fi
+                ;;
+            mysql)
+                if mysql_db_exists "$container" "$db_name" "$user" "${password:-root}"; then
+                    db_exists=true
+                fi
+                ;;
+        esac
+
+        if [ "$db_exists" = "false" ]; then
+            SHOULD_INIT_DB=true
+            echo -e "${BLUE}  → DBが存在しないためDB初期化を実行${NC}"
+        else
+            echo -e "${BLUE}  → mainと同じDBを使用（マイグレーション・シーダーをスキップ）${NC}"
+        fi
+    fi
 }
 
 # ファイルが存在すればコピー（存在しなくてもエラーにはしない）

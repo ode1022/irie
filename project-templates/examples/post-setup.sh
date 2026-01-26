@@ -53,23 +53,12 @@ copy_if_exists "${WORKTREE_SOURCE_DIR}/.env" "./.env"
 # sed_inplace "s/^DB_HOST=.*/DB_HOST=${DB_CONTAINER}/" .env
 # sed_inplace "s/^DB_DATABASE=.*/DB_DATABASE=${WORKTREE_DB_NAME}/" .env
 #
-# # DB作成・マイグレーションの判定:
+# # DB初期化判定（should_init_db関数がSHOULD_INIT_DB変数を設定）
+# # 判定条件:
 # #   1. mainブランチの場合（最初のセットアップ）
 # #   2. --separate-db指定の場合（専用DB）
 # #   3. DBが存在しない場合（安全策）
-# SHOULD_INIT_DB=false
-# if [ "$WORKTREE_DIR" = "main" ] || [ "$WORKTREE_DIR" = "master" ]; then
-#     SHOULD_INIT_DB=true
-#     echo -e "${BLUE}  → mainブランチのためDB初期化を実行${NC}"
-# elif [ "$WORKTREE_USE_SEPARATE_DB" = "true" ]; then
-#     SHOULD_INIT_DB=true
-#     echo -e "${BLUE}  → 専用DBモードのためDB初期化を実行${NC}"
-# elif ! postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME"; then
-#     SHOULD_INIT_DB=true
-#     echo -e "${BLUE}  → DBが存在しないためDB初期化を実行${NC}"
-# else
-#     echo -e "${BLUE}  → mainと同じDBを使用（マイグレーション・シーダーをスキップ）${NC}"
-# fi
+# should_init_db "postgres" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
 #
 # if [ "$SHOULD_INIT_DB" = "true" ]; then
 #     docker exec "$DB_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE ${WORKTREE_DB_NAME};" 2>/dev/null || true

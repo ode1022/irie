@@ -327,15 +327,19 @@ app:
 - 共有DB使用時: .envのDB設定を更新
 - テストDB作成（テストDBは常に専用: `${WORKTREE_SEPARATE_DB_NAME}_testing`）
 
-**DB初期化判定（重要）**: 以下のいずれかに該当する場合はDB作成・マイグレーションを実行：
-1. mainブランチの場合（`WORKTREE_DIR` が `main` または `master`）
-2. `--separate-db` 指定の場合（`WORKTREE_USE_SEPARATE_DB=true`）
-3. DBが存在しない場合（`postgres_db_exists` または `mysql_db_exists` で判定）
+**DB初期化判定（重要）**: `should_init_db`関数を使用して判定：
+- 以下のいずれかに該当する場合は`SHOULD_INIT_DB=true`が設定される
+  1. mainブランチの場合（`WORKTREE_DIR` が `main` または `master`）
+  2. `--separate-db` 指定の場合（`WORKTREE_USE_SEPARATE_DB=true`）
+  3. DBが存在しない場合
 
 ```bash
-# DB存在チェック関数（helpers.shで提供）
-# postgres_db_exists <container> <db_name> [user]
-# mysql_db_exists <container> <db_name> [user] [password]
+# DB初期化判定関数（helpers.shで提供）
+# should_init_db <db_type> <container> <db_name> [user] [password]
+# 結果: SHOULD_INIT_DB変数に true/false を設定
+should_init_db "postgres" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
+# または
+should_init_db "mysql" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
 ```
 
 #### 4. 依存関係について（post-setup.shでは不要）
@@ -359,23 +363,12 @@ volumes:
 
 #### 5. マイグレーション・シーダー実行（条件付き）
 
-**重要**: マイグレーション・シーダーは DB初期化判定に基づいて実行：
+**重要**: マイグレーション・シーダーは `should_init_db` 関数で判定：
 
 ```bash
-# DB初期化判定
-SHOULD_INIT_DB=false
-if [ "$WORKTREE_DIR" = "main" ] || [ "$WORKTREE_DIR" = "master" ]; then
-    SHOULD_INIT_DB=true
-    echo -e "${BLUE}  → mainブランチのためDB初期化を実行${NC}"
-elif [ "$WORKTREE_USE_SEPARATE_DB" = "true" ]; then
-    SHOULD_INIT_DB=true
-    echo -e "${BLUE}  → 専用DBモードのためDB初期化を実行${NC}"
-elif ! postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME"; then  # MySQLの場合は mysql_db_exists
-    SHOULD_INIT_DB=true
-    echo -e "${BLUE}  → DBが存在しないためDB初期化を実行${NC}"
-else
-    echo -e "${BLUE}  → mainと同じDBを使用（マイグレーション・シーダーをスキップ）${NC}"
-fi
+# DB初期化判定（should_init_db関数がSHOULD_INIT_DB変数を設定）
+should_init_db "postgres" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
+# MySQLの場合: should_init_db "mysql" "$DB_CONTAINER" "$WORKTREE_DB_NAME"
 
 # DB作成・マイグレーション
 if [ "$SHOULD_INIT_DB" = "true" ]; then
