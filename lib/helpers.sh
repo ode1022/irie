@@ -53,6 +53,27 @@ wait_for_mysql() {
     return 1
 }
 
+# PostgreSQLでDBが存在するかチェック
+# 戻り値: 存在すれば0、なければ1
+postgres_db_exists() {
+    local container="$1"
+    local db_name="$2"
+    local user="${3:-root}"
+    docker exec "$container" psql -U "$user" -d postgres -tAc \
+        "SELECT 1 FROM pg_database WHERE datname = '${db_name}'" 2>/dev/null | grep -q "1"
+}
+
+# MySQLでDBが存在するかチェック
+# 戻り値: 存在すれば0、なければ1
+mysql_db_exists() {
+    local container="$1"
+    local db_name="$2"
+    local user="${3:-root}"
+    local password="${4:-root}"
+    docker exec "$container" mysql -u"$user" -p"$password" -e \
+        "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${db_name}';" 2>/dev/null | grep -q "$db_name"
+}
+
 # ファイルが存在すればコピー（存在しなくてもエラーにはしない）
 copy_if_exists() {
     local src="$1"

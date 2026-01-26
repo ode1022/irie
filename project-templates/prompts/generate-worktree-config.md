@@ -324,11 +324,19 @@ app:
 サンプルテンプレートを参照して以下を実装：
 - DBコンテナ名を決定（共有DB or worktree専用DB）
 - DB起動待機（`wait_for_postgres`または`wait_for_mysql`）
-- **DB名モードの確認**: `WORKTREE_USE_SEPARATE_DB` 環境変数で判定
-  - `false`（デフォルト）: mainと同じDB名を使用、DB作成・マイグレーション不要
-  - `true`（`--separate-db`指定時）: 専用DB名を使用、DB作成・マイグレーション必要
 - 共有DB使用時: .envのDB設定を更新
-- テストDB作成（テストDBは常に専用: `${WORKTREE_DB_NAME}_testing`）
+- テストDB作成（テストDBは常に専用: `${WORKTREE_SEPARATE_DB_NAME}_testing`）
+
+**DB初期化判定（重要）**: 以下のいずれかに該当する場合はDB作成・マイグレーションを実行：
+1. mainブランチの場合（`WORKTREE_DIR` が `main` または `master`）
+2. `--separate-db` 指定の場合（`WORKTREE_USE_SEPARATE_DB=true`）
+3. DBが存在しない場合（`postgres_db_exists` または `mysql_db_exists` で判定）
+
+```bash
+# DB存在チェック関数（helpers.shで提供）
+# postgres_db_exists <container> <db_name> [user]
+# mysql_db_exists <container> <db_name> [user] [password]
+```
 
 #### 4. 依存関係について（post-setup.shでは不要）
 
@@ -351,15 +359,28 @@ volumes:
 
 #### 5. マイグレーション・シーダー実行（条件付き）
 
-**重要**: マイグレーション・シーダーは `WORKTREE_USE_SEPARATE_DB` に応じて実行を分岐：
+**重要**: マイグレーション・シーダーは DB初期化判定に基づいて実行：
 
 ```bash
-if [ "$WORKTREE_USE_SEPARATE_DB" = "true" ]; then
-    echo "専用DBを使用（マイグレーション・シーダーを実行）"
-    # フレームワークに応じてマイグレーション実行
-    docker compose exec -T app php artisan migrate:fresh --seed
+# DB初期化判定
+SHOULD_INIT_DB=false
+if [ "$WORKTREE_DIR" = "main" ] || [ "$WORKTREE_DIR" = "master" ]; then
+    SHOULD_INIT_DB=true
+    echo -e "${BLUE}  → mainブランチのためDB初期化を実行${NC}"
+elif [ "$WORKTREE_USE_SEPARATE_DB" = "true" ]; then
+    SHOULD_INIT_DB=true
+    echo -e "${BLUE}  → 専用DBモードのためDB初期化を実行${NC}"
+elif ! postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME"; then  # MySQLの場合は mysql_db_exists
+    SHOULD_INIT_DB=true
+    echo -e "${BLUE}  → DBが存在しないためDB初期化を実行${NC}"
 else
-    echo "mainと同じDBを使用（マイグレーション・シーダーをスキップ）"
+    echo -e "${BLUE}  → mainと同じDBを使用（マイグレーション・シーダーをスキップ）${NC}"
+fi
+
+# DB作成・マイグレーション
+if [ "$SHOULD_INIT_DB" = "true" ]; then
+    docker exec "$DB_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE ${WORKTREE_DB_NAME};" 2>/dev/null || true
+    docker compose exec -T app php artisan migrate:fresh --seed
 fi
 ```
 
