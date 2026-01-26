@@ -328,27 +328,16 @@ app:
 - テストDB作成（テストDBは常に専用: `${WORKTREE_SEPARATE_DB_NAME}_testing`）
 
 **DB初期化判定（重要）**: `should_init_db`関数を使用して判定：
-- 以下のいずれかに該当する場合は`SHOULD_INIT_DB=true`が設定される
-  1. mainブランチの場合（`WORKTREE_DIR` が `main` または `master`）
-  2. `--separate-db` 指定の場合（`WORKTREE_USE_SEPARATE_DB=true`）
-  3. DBが存在しない場合
 
 ```bash
-# DB存在チェック関数（helpers.shで提供）
-# postgres_db_exists <container> <db_name> [user] [password]
-# mysql_db_exists <container> <db_name> [user] [password]
-
-# DB初期化判定関数（helpers.shで提供）
-# should_init_db <db_exists>  # "true" or "false"
-# 結果: SHOULD_INIT_DB変数に true/false を設定
-
-# PostgreSQLの場合
+# DB初期化判定（should_init_db関数がSHOULD_INIT_DB変数を設定）
+# SHOULD_INIT_DB=true となる条件:
+#   1. main/masterブランチの場合
+#   2. --separate-db指定の場合（WORKTREE_USE_SEPARATE_DB=true）
+#   3. DBが存在しない場合
 postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
 should_init_db "$DB_EXISTS"
-
-# MySQLの場合
-mysql_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
-should_init_db "$DB_EXISTS"
+# MySQLの場合: mysql_db_exists を使用
 ```
 
 #### 4. 依存関係について（post-setup.shでは不要）
@@ -372,27 +361,34 @@ volumes:
 
 #### 5. マイグレーション・シーダー実行（条件付き）
 
-**重要**: マイグレーション・シーダーは `should_init_db` 関数で判定：
+**重要**: DB作成とマイグレーションは `SHOULD_INIT_DB` 変数で判定：
 
 ```bash
-# DB初期化判定（should_init_db関数がSHOULD_INIT_DB変数を設定）
-postgres_db_exists "$DB_CONTAINER" "$WORKTREE_DB_NAME" && DB_EXISTS=true || DB_EXISTS=false
-should_init_db "$DB_EXISTS"
-
-# DB作成・マイグレーション
+# メインDB作成
 if [ "$SHOULD_INIT_DB" = "true" ]; then
+    echo -e "${BLUE}  → メインデータベース ${WORKTREE_DB_NAME} を作成中...${NC}"
     docker exec "$DB_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE ${WORKTREE_DB_NAME};" 2>/dev/null || true
+fi
+
+# テストDB作成（worktree専用DB名・並行テスト実行のため分離必須）
+echo -e "${BLUE}  → テスト用データベース ${TESTING_DB_NAME} を作成中...${NC}"
+docker exec "$DB_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE ${TESTING_DB_NAME};" 2>/dev/null || true
+
+# === マイグレーション・シーダー ===
+if [ "$SHOULD_INIT_DB" = "true" ]; then
+    echo -e "${BLUE}  → migrate:fresh --seed${NC}"
     docker compose exec -T app php artisan migrate:fresh --seed
 fi
+
+# テストDBマイグレーション（常に実行・並行テスト実行のため分離必須）
+echo -e "${BLUE}  → migrate:fresh --env=testing${NC}"
+docker compose exec -T app php artisan migrate:fresh --env=testing
 ```
 
 フレームワークごとのコマンド例：
 - Laravel: `php artisan migrate:fresh --seed`
 - Rails: `rails db:migrate db:seed`
 - Django: `python manage.py migrate`
-
-テスト用DBのマイグレーションは常に実行（テストDBは常に専用のため）：
-- Laravel: `php artisan migrate:fresh --env=testing`
 
 **重要**: サンプルテンプレートではコメントアウトされている処理も、
 実際のプロジェクトでは有効なコードとして生成すること。
