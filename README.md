@@ -962,9 +962,30 @@ brew install fzf
 
 ## トラブルシューティング
 
-### 502 Bad Gateway
+### 502 Bad Gateway / 504 Gateway Timeout
+
+Traefikがバックエンドに接続できない場合に発生します。以下を順に試してください：
+
+**1. プロジェクト側のコンテナを再起動**
 ```bash
 docker compose restart nginx
+# または
+docker compose up -d --force-recreate
+```
+
+**2. Traefikを再起動**
+```bash
+docker restart shared-traefik
+```
+
+**3. それでも解決しない場合**
+```bash
+# プロジェクト側を完全に再作成
+docker compose down && docker compose up -d
+
+# Traefikも再作成
+cd ~/.irie/shared-services
+docker compose -f traefik.yml up -d --force-recreate
 ```
 
 ### Viteが読み込めない（白い画面）
