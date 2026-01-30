@@ -117,7 +117,7 @@ URL: $TICKET_URL
 
 最終的にブランチ名のみを出力してください（説明や前置き不要）。"
 
-BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" 2>/dev/null | tail -1 | tr -d '[:space:]')
+BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" 2>/dev/null | tail -1 | tr -d '[:space:]' | tr -d '`')
 
 if [ -z "$BRANCH_NAME" ]; then
     echo -e "${RED}エラー: ブランチ名の決定に失敗しました${NC}"
