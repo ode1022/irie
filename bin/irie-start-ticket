@@ -115,7 +115,10 @@ URL: $TICKET_URL
 - 説明は15文字以内に収める
 - 例: feat/SW_CHIYODA-1048-coupon-rank, feat/repo#123-fix-bug
 
-最終的にブランチ名のみを出力してください（説明や前置き不要）。"
+最終的にブランチ名のみをプレーンテキストで出力してください。
+- バッククォートやマークダウン装飾は一切不要
+- 説明や前置きも不要
+- ブランチ名の文字列だけを1行で出力"
 
 BRANCH_NAME=$(claude -p "$BRANCH_NAME_PROMPT" 2>/dev/null | tail -1 | tr -d '[:space:]' | tr -d '`')
 
