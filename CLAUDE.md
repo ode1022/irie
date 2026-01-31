@@ -40,6 +40,17 @@ my_project_123_new_feature
 - プロジェクト固有フック（post-setup.sh）
 - Claude Code連携（irie init）
 
+## bash互換性
+
+macOSの`/bin/bash`はバージョン3.2のため、**bash 3.2互換のコードを書くこと**。
+
+以下の機能は使用禁止:
+- `declare -A`（連想配列） → `"key|value"`形式の通常配列で代替
+- `${var,,}` / `${var^^}`（大文字小文字変換） → `tr`コマンドで代替
+- `mapfile` / `readarray` → `while read`ループで代替
+- `|&`（stderrパイプ） → `2>&1 |`で代替
+- `&>>`（追記リダイレクト） → `>> file 2>&1`で代替
+
 ## テスト
 
 ```bash

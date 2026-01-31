@@ -15,57 +15,60 @@ detect_platform() {
 }
 
 # === JetBrains IDE 定義 ===
-# フォルダ名パターン:実行ファイル名:表示名
-declare -A JETBRAINS_IDES=(
-    ["PhpStorm"]="phpstorm64.exe:PhpStorm"
-    ["WebStorm"]="webstorm64.exe:WebStorm"
-    ["IntelliJ IDEA"]="idea64.exe:IntelliJ IDEA"
-    ["PyCharm"]="pycharm64.exe:PyCharm"
-    ["RubyMine"]="rubymine64.exe:RubyMine"
-    ["GoLand"]="goland64.exe:GoLand"
-    ["CLion"]="clion64.exe:CLion"
-    ["DataGrip"]="datagrip64.exe:DataGrip"
-    ["Rider"]="rider64.exe:Rider"
-    ["Fleet"]="fleet64.exe:Fleet"
-    ["Android Studio"]="studio64.exe:Android Studio"
-    ["Aqua"]="aqua64.exe:Aqua"
-    ["RustRover"]="rustrover64.exe:RustRover"
-    ["Writerside"]="writerside64.exe:Writerside"
+# bash 3.2互換のため通常の配列を使用（macOSの/bin/bashは3.2）
+# 形式: "フォルダ名パターン|実行ファイル名|表示名"
+JETBRAINS_IDES=(
+    "PhpStorm|phpstorm64.exe|PhpStorm"
+    "WebStorm|webstorm64.exe|WebStorm"
+    "IntelliJ IDEA|idea64.exe|IntelliJ IDEA"
+    "PyCharm|pycharm64.exe|PyCharm"
+    "RubyMine|rubymine64.exe|RubyMine"
+    "GoLand|goland64.exe|GoLand"
+    "CLion|clion64.exe|CLion"
+    "DataGrip|datagrip64.exe|DataGrip"
+    "Rider|rider64.exe|Rider"
+    "Fleet|fleet64.exe|Fleet"
+    "Android Studio|studio64.exe|Android Studio"
+    "Aqua|aqua64.exe|Aqua"
+    "RustRover|rustrover64.exe|RustRover"
+    "Writerside|writerside64.exe|Writerside"
 )
 
 # macOS用のJetBrains IDE app名
-declare -A JETBRAINS_MACOS_APPS=(
-    ["PhpStorm"]="PhpStorm.app"
-    ["WebStorm"]="WebStorm.app"
-    ["IntelliJ IDEA"]="IntelliJ IDEA.app"
-    ["IntelliJ IDEA CE"]="IntelliJ IDEA CE.app"
-    ["PyCharm"]="PyCharm.app"
-    ["PyCharm CE"]="PyCharm CE.app"
-    ["RubyMine"]="RubyMine.app"
-    ["GoLand"]="GoLand.app"
-    ["CLion"]="CLion.app"
-    ["DataGrip"]="DataGrip.app"
-    ["Rider"]="Rider.app"
-    ["Fleet"]="Fleet.app"
-    ["Android Studio"]="Android Studio.app"
-    ["AppCode"]="AppCode.app"
-    ["Aqua"]="Aqua.app"
-    ["RustRover"]="RustRover.app"
+# 形式: "IDE名|app名"
+JETBRAINS_MACOS_APPS=(
+    "PhpStorm|PhpStorm.app"
+    "WebStorm|WebStorm.app"
+    "IntelliJ IDEA|IntelliJ IDEA.app"
+    "IntelliJ IDEA CE|IntelliJ IDEA CE.app"
+    "PyCharm|PyCharm.app"
+    "PyCharm CE|PyCharm CE.app"
+    "RubyMine|RubyMine.app"
+    "GoLand|GoLand.app"
+    "CLion|CLion.app"
+    "DataGrip|DataGrip.app"
+    "Rider|Rider.app"
+    "Fleet|Fleet.app"
+    "Android Studio|Android Studio.app"
+    "AppCode|AppCode.app"
+    "Aqua|Aqua.app"
+    "RustRover|RustRover.app"
 )
 
-# Linux用のJetBrains IDE（コマンド名:Toolboxアプリ名）
-declare -A JETBRAINS_LINUX_CMDS=(
-    ["phpstorm"]="PhpStorm"
-    ["webstorm"]="WebStorm"
-    ["idea"]="IDEA-U"
-    ["pycharm"]="PyCharm-P"
-    ["rubymine"]="RubyMine"
-    ["goland"]="GoLand"
-    ["clion"]="CLion"
-    ["datagrip"]="DataGrip"
-    ["rider"]="Rider"
-    ["fleet"]="Fleet"
-    ["studio"]="AndroidStudio"
+# Linux用のJetBrains IDE
+# 形式: "コマンド名|Toolboxアプリ名"
+JETBRAINS_LINUX_CMDS=(
+    "phpstorm|PhpStorm"
+    "webstorm|WebStorm"
+    "idea|IDEA-U"
+    "pycharm|PyCharm-P"
+    "rubymine|RubyMine"
+    "goland|GoLand"
+    "clion|CLion"
+    "datagrip|DataGrip"
+    "rider|Rider"
+    "fleet|Fleet"
+    "studio|AndroidStudio"
 )
 
 # === WSL用: JetBrains IDE動的検出 ===
@@ -73,18 +76,18 @@ detect_wsl_jetbrains() {
     local jetbrains_dir="/mnt/c/Program Files/JetBrains"
     [ ! -d "$jetbrains_dir" ] && return
 
-    # 各IDEのフォルダを検出
-    for ide_pattern in "${!JETBRAINS_IDES[@]}"; do
-        local info="${JETBRAINS_IDES[$ide_pattern]}"
-        local exe_name="${info%%:*}"
-        local display_name="${info#*:}"
+    local entry
+    for entry in "${JETBRAINS_IDES[@]}"; do
+        local ide_pattern="${entry%%|*}"
+        local rest="${entry#*|}"
+        local exe_name="${rest%%|*}"
+        local display_name="${rest#*|}"
 
         # 最新バージョンのフォルダを取得
         local latest
         latest=$(ls -d "$jetbrains_dir/$ide_pattern"* 2>/dev/null | sort -V | tail -1)
 
         if [ -n "$latest" ] && [ -f "$latest/bin/$exe_name" ]; then
-            # IDを生成（小文字、スペースをハイフンに）
             local id
             id=$(echo "$display_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
             echo "${id}:${display_name}:${latest}/bin/${exe_name}"
@@ -94,8 +97,10 @@ detect_wsl_jetbrains() {
 
 # === macOS用: JetBrains IDE動的検出 ===
 detect_macos_jetbrains() {
-    for ide_name in "${!JETBRAINS_MACOS_APPS[@]}"; do
-        local app_name="${JETBRAINS_MACOS_APPS[$ide_name]}"
+    local entry
+    for entry in "${JETBRAINS_MACOS_APPS[@]}"; do
+        local ide_name="${entry%%|*}"
+        local app_name="${entry#*|}"
         local app_path="/Applications/$app_name"
 
         if [ -d "$app_path" ]; then
@@ -108,8 +113,10 @@ detect_macos_jetbrains() {
 
 # === Linux用: JetBrains IDE動的検出 ===
 detect_linux_jetbrains() {
-    for cmd in "${!JETBRAINS_LINUX_CMDS[@]}"; do
-        local toolbox_name="${JETBRAINS_LINUX_CMDS[$cmd]}"
+    local entry
+    for entry in "${JETBRAINS_LINUX_CMDS[@]}"; do
+        local cmd="${entry%%|*}"
+        local toolbox_name="${entry#*|}"
         local path=""
 
         # 1. コマンドとして検出
@@ -128,7 +135,6 @@ detect_linux_jetbrains() {
         fi
 
         if [ -n "$path" ]; then
-            # 表示名を取得
             local display_name="$cmd"
             case "$cmd" in
                 phpstorm) display_name="PhpStorm" ;;
