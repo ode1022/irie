@@ -126,17 +126,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# --baseが指定されていない場合、現在のworktreeのブランチをデフォルトにする
-# （一般的なgit branch/worktree addの挙動に合わせる）
-if [ -z "$BASE_BRANCH" ]; then
-    # 現在のディレクトリがgitリポジトリ（worktree）内にいるか確認
-    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-    if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "HEAD" ]; then
-        BASE_BRANCH="$CURRENT_BRANCH"
-        BASE_BRANCH_AUTO=true
-    fi
-fi
-
 # 引数チェック
 if [ -z "$BRANCH_NAME" ]; then
     echo -e "${RED}エラー: ブランチ名またはディレクトリ名を指定してください${NC}"
@@ -149,6 +138,27 @@ if [ -z "$BRANCH_NAME" ]; then
     echo "  $0 feat/new-feature --base main          # → mainブランチから派生"
     echo "  $0 feat/new-feature --base origin/main   # → リモートのmainから派生"
     exit 1
+fi
+
+# ブランチの存在を確認（ローカル → リモート）
+BRANCH_EXISTS=false
+BRANCH_IS_REMOTE=false
+
+# ローカルブランチを確認
+if git_cmd show-ref --verify --quiet "refs/heads/$BRANCH_NAME" 2>/dev/null; then
+    BRANCH_EXISTS=true
+fi
+
+# ローカルになければ fetch してリモートを確認
+if [ "$BRANCH_EXISTS" = false ]; then
+    if git_cmd remote get-url origin &>/dev/null; then
+        echo -e "${BLUE}リモートブランチを確認中...${NC}"
+        git_cmd fetch origin 2>/dev/null || true
+        if git_cmd show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME" 2>/dev/null; then
+            BRANCH_EXISTS=true
+            BRANCH_IS_REMOTE=true
+        fi
+    fi
 fi
 
 # ブランチ名かディレクトリ名かを判定して処理
@@ -206,12 +216,14 @@ if [ "$SEPARATE_DB" = "true" ]; then
 else
     echo -e "${YELLOW}DBモード: mainと共有（マイグレーションをスキップ）${NC}"
 fi
-if [ -n "$BASE_BRANCH" ]; then
-    if [ "${BASE_BRANCH_AUTO:-}" = "true" ]; then
-        echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH} (現在のブランチ)${NC}"
+if [ "$BRANCH_EXISTS" = true ]; then
+    if [ "$BRANCH_IS_REMOTE" = true ]; then
+        echo -e "${YELLOW}モード: リモートブランチをチェックアウト${NC}"
     else
-        echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
+        echo -e "${YELLOW}モード: 既存ブランチをチェックアウト${NC}"
     fi
+elif [ -n "$BASE_BRANCH" ]; then
+    echo -e "${YELLOW}ベースブランチ: ${BASE_BRANCH}${NC}"
 fi
 echo ""
 
@@ -227,19 +239,37 @@ else
     # https://youtrack.jetbrains.com/issue/IJPL-72834
     if [ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT/.bare" ]; then
         cd "$PROJECT_ROOT/.bare"
-        if [ -n "$BASE_BRANCH" ]; then
-            echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
-            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
-        else
-            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" 2>/dev/null || git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
-        fi
     else
         cd "$WORK_DIR"
+    fi
+
+    # ブランチの存在に応じて作成方法を分岐
+    if [ "$BRANCH_EXISTS" = true ]; then
+        # 既存ブランチをチェックアウト
+        if [ -n "$BASE_BRANCH" ]; then
+            echo -e "${YELLOW}  → ブランチ '${BRANCH_NAME}' は既に存在するため --base は無視されます${NC}"
+        fi
+        if [ "$BRANCH_IS_REMOTE" = true ]; then
+            echo -e "${BLUE}  → リモートブランチ origin/${BRANCH_NAME} をチェックアウト${NC}"
+        else
+            echo -e "${BLUE}  → 既存ブランチ ${BRANCH_NAME} をチェックアウト${NC}"
+        fi
+        git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
+    else
+        # 新規ブランチを作成
+        # --baseが未指定なら現在のブランチをベースにする
+        # WORK_DIRから取得（cd後は.bareにいる可能性があるため）
+        if [ -z "$BASE_BRANCH" ]; then
+            CURRENT_BRANCH=$(cd "$WORK_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+            if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "HEAD" ]; then
+                BASE_BRANCH="$CURRENT_BRANCH"
+            fi
+        fi
         if [ -n "$BASE_BRANCH" ]; then
             echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
             git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
         else
-            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" 2>/dev/null || git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
+            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME"
         fi
     fi
     echo -e "${GREEN}✓ Worktree作成完了${NC}"

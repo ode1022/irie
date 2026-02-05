@@ -94,7 +94,7 @@ teardown_file() {
 
     # テスト終了時にworktreeとコンテナをクリーンアップ
     if [ -n "$TEST_WORKTREE_BASE" ]; then
-        for worktree in test-traefik test-same-db test-separate-db test-base-default test-base-explicit; do
+        for worktree in test-traefik test-same-db test-separate-db test-base-default test-base-explicit test-existing-local test-existing-base; do
             WORKTREE_PATH="$TEST_WORKTREE_BASE/$worktree"
             if [ -d "$WORKTREE_PATH" ]; then
                 # Dockerコンテナを停止・削除
@@ -471,11 +471,47 @@ wait_for_http() {
     git checkout main
 }
 
+# 既存のローカルブランチがある場合、チェックアウトされる（-bなし）
+@test "Base branch: checks out existing local branch without -b" {
+    cd "$TEST_PROJECT_DIR"
+
+    # 事前にブランチだけ作成（worktreeではない）
+    git branch feat/test-existing-local 2>/dev/null || true
+
+    # irie addで既存ブランチをチェックアウト
+    run "$IRIE_DIR/bin/irie" add feat/test-existing-local
+    [ "$status" -eq 0 ]
+
+    # worktreeが作成されている
+    [ -d "$TEST_WORKTREE_BASE/test-existing-local" ]
+
+    # 出力に「既存ブランチ」のメッセージが含まれている
+    echo "$output" | grep -q "既存ブランチ"
+}
+
+# --baseを指定しても既存ブランチがある場合はチェックアウトされ、--baseは無視される
+@test "Base branch: ignores --base when branch already exists" {
+    cd "$TEST_PROJECT_DIR"
+
+    # 事前にブランチだけ作成
+    git branch feat/test-existing-base 2>/dev/null || true
+
+    # --base付きでirie add
+    run "$IRIE_DIR/bin/irie" add feat/test-existing-base --base main
+    [ "$status" -eq 0 ]
+
+    # worktreeが作成されている
+    [ -d "$TEST_WORKTREE_BASE/test-existing-base" ]
+
+    # --baseが無視された旨のメッセージが含まれている
+    echo "$output" | grep -q "無視されます"
+}
+
 # ベースブランチテスト用worktreeをクリーンアップ
 @test "Base branch: cleanup test worktrees" {
     cd "$TEST_PROJECT_DIR"
 
-    for worktree in test-base-default test-base-explicit; do
+    for worktree in test-base-default test-base-explicit test-existing-local test-existing-base; do
         WORKTREE_PATH="$TEST_WORKTREE_BASE/$worktree"
         if [ -d "$WORKTREE_PATH" ]; then
             cd "$WORKTREE_PATH" 2>/dev/null && docker-compose down 2>/dev/null || true
@@ -486,6 +522,8 @@ wait_for_http() {
 
     [ ! -d "$TEST_WORKTREE_BASE/test-base-default" ]
     [ ! -d "$TEST_WORKTREE_BASE/test-base-explicit" ]
+    [ ! -d "$TEST_WORKTREE_BASE/test-existing-local" ]
+    [ ! -d "$TEST_WORKTREE_BASE/test-existing-base" ]
 }
 
 # === Shared DB connection tests ===
