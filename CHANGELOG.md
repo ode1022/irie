@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/ode1022/irie/compare/irie-v1.2.0...irie-v2.0.0) (2026-02-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* start-ticketをstart-taskにリネームし、自由テキスト入力・--baseオプションに対応
+
+### Features
+
+* start-ticketをstart-taskにリネームし、自由テキスト入力・--baseオプションに対応 ([3351a2a](https://github.com/ode1022/irie/commit/3351a2ac10bca8f28ca5f8d7d22404ff41f2061f))
+
 ## [1.2.0](https://github.com/ode1022/irie/compare/irie-v1.1.13...irie-v1.2.0) (2026-02-05)
 
 
