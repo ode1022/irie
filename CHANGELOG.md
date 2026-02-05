@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/ode1022/irie/compare/irie-v2.0.0...irie-v2.0.1) (2026-02-05)
+
+
+### Bug Fixes
+
+* start-taskのClaude起動プロンプトにブランチ作成済み情報を追加 ([cd6615b](https://github.com/ode1022/irie/commit/cd6615b32a2d9cbce83852ce9dcd9e5ccbb270b1))
+
 ## [2.0.0](https://github.com/ode1022/irie/compare/irie-v1.2.0...irie-v2.0.0) (2026-02-05)
 
 
