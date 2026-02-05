@@ -57,7 +57,7 @@ _irie_completions() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="clone convert add remove list cd open info config init update override start-ticket shell-init completion help version"
+    local commands="clone convert add remove list cd open info config init update override start-task shell-init completion help version"
     local add_opts="--base --root --separate-db --help"
 
     # プロジェクトルートを探す関数
@@ -163,9 +163,9 @@ _irie_completions() {
                     local override_opts="--setup --help"
                     COMPREPLY=($(compgen -W "${override_opts}" -- "${cur}"))
                     ;;
-                start-ticket)
-                    local start_ticket_opts="--dry-run --no-claude --help"
-                    COMPREPLY=($(compgen -W "${start_ticket_opts}" -- "${cur}"))
+                start-task)
+                    local start_task_opts="--base --dry-run --no-claude --help"
+                    COMPREPLY=($(compgen -W "${start_task_opts}" -- "${cur}"))
                     ;;
             esac
             ;;
@@ -196,7 +196,7 @@ _irie() {
         'init:Claude Codeでプロジェクト用テンプレートを生成'
         'update:irieを最新版に更新'
         'override:docker-compose.override.ymlを生成'
-        'start-ticket:チケットURLからブランチ作成+Claude Code起動'
+        'start-task:タスク情報からブランチ作成+Claude Code起動'
         'shell-init:シェル統合スクリプトを出力'
         'completion:シェル補完スクリプト'
         'help:ヘルプを表示'
@@ -360,9 +360,10 @@ _irie() {
                             '--help[ヘルプを表示]'
                     fi
                     ;;
-                start-ticket)
+                start-task)
                     _arguments \
-                        '1:ticket URL:' \
+                        '1:ticket URL or description:' \
+                        '--base[ベースブランチを指定]:branch:($(_irie_get_branches))' \
                         '--dry-run[ブランチ名の決定のみ]' \
                         '--no-claude[Claude Codeを起動しない]' \
                         '--help[ヘルプを表示]'

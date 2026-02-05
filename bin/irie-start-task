@@ -1,0 +1,238 @@
+#!/bin/bash
+
+# irie start-task - タスク情報からブランチを作成しClaude Codeを起動
+# チケットURL、自由テキスト、またはその両方からブランチ名を決定
+
+set -e
+
+# カラー出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+show_help() {
+    cat << 'EOF'
+irie start-task - タスク情報からブランチを作成しClaude Codeを起動
+
+使い方:
+  irie start-task <description or ticket-url> [options]
+
+引数:
+  description     タスクの説明文（自由テキスト）
+                  ベースブランチの指定も自然言語で記述できます
+  ticket-url      チケットのURL（Backlog, GitHub Issues, GitLab, Jira 等）
+                  説明文とURLを組み合わせることもできます
+
+オプション:
+  --base <branch> ベースブランチを指定（テキスト中の指定より優先）
+  --dry-run       ブランチ名の決定のみ行い、実際の作成は行わない
+  --no-claude     worktree作成後にClaude Codeを起動しない
+  -h, --help      このヘルプを表示
+
+処理の流れ:
+  1. 入力全体をClaude Codeに渡してブランチ名とベースブランチを決定
+  2. URLが含まれていればチケット情報も取得して判断材料にする
+  3. irie add でworktreeを作成
+  4. 作成したworktreeでClaude Codeを起動（タスク情報付き）
+
+例:
+  irie start-task https://example.backlog.com/view/PROJ_NAME-123
+  irie start-task "update-apiの修正"
+  irie start-task "update-apiの修正" --base production
+  irie start-task update-apiの修正をしたい。baseはproductionから。
+  irie start-task https://example.backlog.com/view/PROJ_NAME-123 追加の補足説明
+EOF
+}
+
+# 引数パース
+TASK_INPUT=""
+BASE_BRANCH=""
+DRY_RUN=false
+NO_CLAUDE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --no-claude)
+            NO_CLAUDE=true
+            shift
+            ;;
+        --base)
+            BASE_BRANCH="$2"
+            shift 2
+            ;;
+        *)
+            if [ -z "$TASK_INPUT" ]; then
+                TASK_INPUT="$1"
+            else
+                TASK_INPUT="$TASK_INPUT $1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$TASK_INPUT" ]; then
+    echo -e "${RED}エラー: タスクの説明またはチケットURLを指定してください${NC}"
+    echo ""
+    show_help
+    exit 1
+fi
+
+# claudeコマンドの存在確認
+if ! command -v claude &> /dev/null; then
+    echo -e "${RED}エラー: claudeコマンドが見つかりません${NC}"
+    echo "Claude Codeをインストールしてください"
+    exit 1
+fi
+
+echo -e "${BLUE}タスク入力:${NC} $TASK_INPUT"
+if [ -n "$BASE_BRANCH" ]; then
+    echo -e "${BLUE}ベースブランチ（--base指定）:${NC} $BASE_BRANCH"
+fi
+echo ""
+
+# Claude Codeでブランチ名（とベースブランチ）を決定
+echo -e "${CYAN}ブランチ名を決定中...${NC}"
+
+# --baseが未指定のときだけClaude Codeにベースブランチ抽出を依頼
+if [ -n "$BASE_BRANCH" ]; then
+    BASE_INSTRUCTION=""
+else
+    BASE_INSTRUCTION="
+また、入力にベースブランチ（派生元ブランチ）の指定が含まれている場合は抽出してください。
+例:「baseはproductionから」「mainブランチベースで」「productionから派生」など。"
+fi
+
+BRANCH_NAME_PROMPT="以下の入力からGitブランチ名を決定してください。
+入力にはチケットURL、タスクの説明文、またはその両方が含まれる場合があります。
+
+入力: $TASK_INPUT
+
+手順:
+1. 入力にURL（http://またはhttps://）が含まれている場合、チケット情報を取得
+   - Backlog: mcp__backlog__get_issue を使用
+   - GitHub: gh issue view コマンドを使用
+   - GitLab: glab issue view コマンドを使用
+   - Jira: Jira MCPを使用
+   - Linear: Linear MCPを使用
+   - その他: 対応するMCPまたはCLIを探して使用
+2. URL・テキスト両方の情報を総合してブランチ名を決定
+3. ベースブランチの指定があれば抽出${BASE_INSTRUCTION}
+
+ブランチ名のルール:
+- URLがある場合: feat/<チケットキー>-<簡潔な説明>（チケットキーはURLから抽出したものをそのまま使用）
+- URLがない場合: feat/<簡潔な説明>
+- 説明部分は英語でケバブケース（kebab-case）
+- 説明は30文字以内に収める
+- 例: feat/PROJ_NAME-456-update-api, feat/update-api-endpoint
+
+出力形式（必ずこの形式で出力してください。他の説明や装飾は一切不要）:
+BRANCH:<ブランチ名>
+BASE:<ベースブランチ名 or none>"
+
+CLAUDE_RESULT=$(claude -p "$BRANCH_NAME_PROMPT" 2>/dev/null)
+
+# 結果をパース
+BRANCH_NAME=$(echo "$CLAUDE_RESULT" | grep '^BRANCH:' | sed 's/^BRANCH://' | tr -d '[:space:]' | tr -d '`')
+CLAUDE_BASE=$(echo "$CLAUDE_RESULT" | grep '^BASE:' | sed 's/^BASE://' | tr -d '[:space:]' | tr -d '`')
+
+if [ -z "$BRANCH_NAME" ]; then
+    echo -e "${RED}エラー: ブランチ名の決定に失敗しました${NC}"
+    echo -e "${YELLOW}Claude Codeの出力:${NC}"
+    echo "$CLAUDE_RESULT"
+    exit 1
+fi
+
+# ブランチ名の検証（feat/で始まるか）
+if [[ ! "$BRANCH_NAME" =~ ^feat/ ]]; then
+    echo -e "${YELLOW}警告: ブランチ名がfeat/で始まっていません: $BRANCH_NAME${NC}"
+    echo -e "${YELLOW}feat/を付加します${NC}"
+    BRANCH_NAME="feat/$BRANCH_NAME"
+fi
+
+# ベースブランチ: --baseフラグが未指定 かつ Claudeが抽出した場合に採用
+if [ -z "$BASE_BRANCH" ] && [ -n "$CLAUDE_BASE" ] && [ "$CLAUDE_BASE" != "none" ]; then
+    BASE_BRANCH="$CLAUDE_BASE"
+fi
+
+echo -e "${GREEN}決定したブランチ名:${NC} $BRANCH_NAME"
+if [ -n "$BASE_BRANCH" ]; then
+    echo -e "${GREEN}ベースブランチ:${NC} $BASE_BRANCH"
+fi
+echo ""
+
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}--dry-run: 実際の作成は行いません${NC}"
+    exit 0
+fi
+
+# irie addでworktreeを作成
+echo -e "${CYAN}worktreeを作成中...${NC}"
+
+ADD_ARGS=("$BRANCH_NAME")
+if [ -n "$BASE_BRANCH" ]; then
+    ADD_ARGS+=("--base" "$BASE_BRANCH")
+fi
+
+WORKTREE_OUTPUT=$(irie add "${ADD_ARGS[@]}" 2>&1) || {
+    echo -e "${RED}エラー: worktreeの作成に失敗しました${NC}"
+    echo "$WORKTREE_OUTPUT"
+    exit 1
+}
+
+echo "$WORKTREE_OUTPUT"
+
+# worktreeのパスを取得
+DIR_NAME="${BRANCH_NAME#feat/}"
+
+# カレントディレクトリがbare構成のルートかworktree内かを判定
+if [ -d ".bare" ]; then
+    WORKTREE_PATH="$(pwd)/$DIR_NAME"
+elif [ -d "../.bare" ]; then
+    WORKTREE_PATH="$(dirname "$(pwd)")/$DIR_NAME"
+else
+    # 通常のgitリポジトリの場合
+    WORKTREE_PATH=$(git worktree list --porcelain | grep -A2 "worktree.*$DIR_NAME" | head -1 | sed 's/worktree //')
+fi
+
+if [ ! -d "$WORKTREE_PATH" ]; then
+    echo -e "${YELLOW}警告: worktreeパスの自動検出に失敗しました${NC}"
+    echo -e "${YELLOW}手動でディレクトリに移動してclaudeを起動してください${NC}"
+    exit 0
+fi
+
+echo ""
+echo -e "${GREEN}worktree作成完了:${NC} $WORKTREE_PATH"
+
+if [ "$NO_CLAUDE" = true ]; then
+    echo ""
+    echo -e "${YELLOW}--no-claude: Claude Codeは起動しません${NC}"
+    echo -e "手動で起動する場合: cd $WORKTREE_PATH && claude"
+    exit 0
+fi
+
+# 新しいworktreeでClaude Codeを起動
+echo ""
+echo -e "${CYAN}Claude Codeを起動中...${NC}"
+
+cd "$WORKTREE_PATH"
+
+CLAUDE_PROMPT="タスクを開始します。
+
+タスク情報: $TASK_INPUT
+
+作業内容を確認し、作業計画を立ててから実装を進めてください。
+URLが含まれている場合は、まずチケット詳細を取得してください。"
+
+exec claude "$CLAUDE_PROMPT"

@@ -97,6 +97,7 @@ irie convert
 | `irie convert` | 既存リポジトリをBare構成に変換 |
 | `irie init` | テンプレートを自動生成（Claude Code連携） |
 | `irie override <mode>` | テンプレートからdocker-compose.override.ymlを生成 |
+| `irie start-task <info>` | タスク情報からブランチ作成＆Claude Code起動 |
 | `irie update` | irie自体を更新 |
 
 ---
@@ -522,6 +523,73 @@ irie override traefik --setup
 2. `docker compose up -d`でコンテナ起動
 3. `post-setup.sh`の実行（.envコピー、DB作成、マイグレーション等）
 
+## irie start-task
+
+タスク情報からブランチ名を決定し、worktreeを作成してClaude Codeを起動します。チケットURL、自由テキスト、またはその両方を入力できます。
+
+```bash
+# チケットURLから
+irie start-task https://example.backlog.com/view/PROJ_NAME-123
+
+# 自由テキストから
+irie start-task "update-apiの修正"
+
+# 引用符なしの自然文（複数単語を自動結合）
+irie start-task update-apiの修正をしたい。baseはproductionから。
+
+# ベースブランチを--baseオプションで指定
+irie start-task "new-featureの追加" --base production
+
+# チケットURL + 補足テキスト
+irie start-task https://example.backlog.com/view/PROJ_NAME-123 追加の補足説明
+
+# ブランチ名の確認のみ（worktree作成しない）
+irie start-task "new-featureの追加" --dry-run
+```
+
+### 入力の柔軟性
+
+入力はClaude Codeが解釈するため、以下の指定方法が使えます：
+
+| 入力パターン | 例 |
+|-------------|-----|
+| チケットURL | `https://example.backlog.com/view/PROJ_NAME-123` |
+| 自由テキスト | `"update-apiの修正"` |
+| URL + テキスト | `https://example.backlog.com/view/PROJ_NAME-123 追加の補足説明` |
+| テキスト中にbase指定 | `update-apiの修正をしたい。baseはproductionから。` |
+| 引用符なし複数単語 | `update-apiの修正をしたい` |
+
+### ベースブランチの指定
+
+ベースブランチは2つの方法で指定できます：
+
+1. **`--base`オプション**（明示的・優先）
+   ```bash
+   irie start-task "new-featureの追加" --base production
+   ```
+
+2. **テキスト中に記述**（自然言語でClaude Codeが抽出）
+   ```bash
+   irie start-task new-featureの追加をしたい。baseはproductionから。
+   ```
+
+`--base`オプションが指定されている場合はテキスト中の指定より優先されます。
+
+### オプション
+
+| オプション | 説明 |
+|-----------|------|
+| `--base <branch>` | ベースブランチを指定（`irie add`に渡される） |
+| `--dry-run` | ブランチ名の決定のみ行い、実際の作成は行わない |
+| `--no-claude` | worktree作成後にClaude Codeを起動しない |
+
+### 処理の流れ
+
+1. 入力全体をClaude Codeに渡してブランチ名とベースブランチを決定
+2. URLが含まれていればチケット情報も取得して判断材料にする
+3. `irie add`でworktreeを作成
+4. 作成したworktreeでClaude Codeを起動（タスク情報付き）
+
 ## irie remove
 
 ```bash
@@ -940,7 +1008,7 @@ docker exec shared-postgres psql -U root -d postgres \
 | Docker Compose | ✅ | - | 2.35.1 | V2形式（`docker compose`コマンド） |
 | Bash | ✅ | 4.0 | 5.1.16 | |
 | fzf | ⭐ | - | 0.67.0 | 任意だが強く推奨 |
-| Claude Code | ⭐ | - | - | `irie init`で使用（任意） |
+| Claude Code | ⭐ | - | - | `irie init`、`irie start-task`で使用（任意） |
 
 ※ Docker/Docker Composeの最小バージョンは未検証です。上記は動作確認済みのバージョンです。
 
@@ -1023,6 +1091,7 @@ irie/
 ├── irie-config            # 設定管理
 ├── irie-update            # 自己更新
 ├── irie-shell-init        # シェル統合
+├── irie-start-task        # タスク情報からブランチ作成＆Claude Code起動
 ├── irie-completion        # 補完スクリプト
 ├── lib/                   # 共通ライブラリ
 │   ├── git-helpers.sh

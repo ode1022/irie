@@ -283,7 +283,7 @@ wait_for_http() {
     FQDN=$(sed -n "s/.*Host(\`\([^\`]*\)\`).*/\1/p" "$OVERRIDE_FILE" | head -1)
 
     # HTTPS接続テスト（自己署名証明書のため -k オプション）
-    run curl -s -k -o /dev/null -w "%{http_code}" -H "Host: $FQDN" https://localhost:8443
+    run curl -s -k -o /dev/null -w "%{http_code}" -H "Host: $FQDN" https://localhost
     [ "$output" = "200" ]
 }
 
