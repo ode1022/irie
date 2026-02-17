@@ -158,6 +158,14 @@ if [ "$RUN_SETUP" = true ]; then
         # 現在のブランチ名を取得
         BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "main")
 
+        # .varsファイルからDB設定を読み込み（irie addで保存された値）
+        VARS_FILE="$HOME/.irie/worktrees/${PROJECT_NAME}/${DIR_NAME}.vars"
+        WORKTREE_USE_SEPARATE_DB="false"
+        WORKTREE_SEPARATE_DB_NAME="$DB_NAME"
+        if [ -f "$VARS_FILE" ]; then
+            source "$VARS_FILE"
+        fi
+
         # 環境変数をエクスポートしてpost-setup.shを実行
         export WORKTREE_DIR="$DIR_NAME"
         export WORKTREE_BRANCH="$BRANCH_NAME"
@@ -165,6 +173,8 @@ if [ "$RUN_SETUP" = true ]; then
         export WORKTREE_PREFIX="$WORKTREE_PREFIX"
         export BASE_DOMAIN="$BASE_DOMAIN"
         export WORKTREE_DB_NAME="$DB_NAME"
+        export WORKTREE_SEPARATE_DB_NAME="$WORKTREE_SEPARATE_DB_NAME"
+        export WORKTREE_USE_SEPARATE_DB="$WORKTREE_USE_SEPARATE_DB"
         export WORKTREE_SOURCE_DIR="$CURRENT_DIR"
         export WORKTREE_TRAEFIK_ID="$TRAEFIK_ID"
         export IRIE_LIB_DIR="${IRIE_DIR}/lib"
