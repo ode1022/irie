@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="irie logo" width="400">
+</p>
+
 # irie - Git Worktree + Docker 並行開発ツール
 
 Docker環境でのWebアプリ開発に特化した、git worktree並行開発ツールです。
