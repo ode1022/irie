@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/ode1022/irie/compare/irie-v1.0.1...irie-v1.0.2) (2026-02-19)
+
+
+### Bug Fixes
+
+* READMEのポート管理不要の説明を簡潔化 ([bccd676](https://github.com/ode1022/irie/commit/bccd6763ff0b92db77985ada1a29d789e176c581))
+
 ## [1.0.1](https://github.com/ode1022/irie/compare/irie-v1.0.0...irie-v1.0.1) (2026-02-19)
 
 
