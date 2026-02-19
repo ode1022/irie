@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/ode1022/irie/compare/irie-v1.0.5...irie-v1.1.0) (2026-02-19)
+
+
+### Features
+
+* デモプロジェクトリンク追加、ドキュメント変更時のCI・リリースをスキップ ([c8e3a91](https://github.com/ode1022/irie/commit/c8e3a91b635cd8f1e8a8e40261edf3ceafe4e500))
+
 ## [1.0.5](https://github.com/ode1022/irie/compare/irie-v1.0.4...irie-v1.0.5) (2026-02-19)
 
 
