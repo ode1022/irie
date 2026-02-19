@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/ode1022/irie/compare/irie-v1.0.4...irie-v1.0.5) (2026-02-19)
+
+
+### Bug Fixes
+
+* バージョンアップテスト（v1.0.5）- READMEを元の内容に復元 ([ba3658f](https://github.com/ode1022/irie/commit/ba3658fe2f0f81ea5fb654a610db9f5a9f9d2cfe))
+
 ## [1.0.4](https://github.com/ode1022/irie/compare/irie-v1.0.3...irie-v1.0.4) (2026-02-19)
 
 
