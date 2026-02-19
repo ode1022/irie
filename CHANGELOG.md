@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/ode1022/irie/compare/irie-v1.0.3...irie-v1.0.4) (2026-02-19)
+
+
+### Bug Fixes
+
+* バージョンアップテスト（v1.0.4） ([c3b0016](https://github.com/ode1022/irie/commit/c3b0016f7e9ccd9402dfc9102bd0d017379e0f36))
+
 ## [1.0.3](https://github.com/ode1022/irie/compare/irie-v1.0.2...irie-v1.0.3) (2026-02-19)
 
 
