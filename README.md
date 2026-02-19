@@ -9,7 +9,7 @@ Laravel、Rails、FastAPI等のフレームワークと相性が良く、複数�
 
 ## 特色
 
-- **Git Worktree + Docker環境を自動構築** - `irie add feat/xxx` だけでworktree作成、docker-compose.override.yml生成、コンテナ起動、DB作成、マイグレーションまで一括実行
+- **ワンコマンドで環境構築** - `irie add feat/xxx` だけでworktree作成、docker-compose.override.yml生成、コンテナ起動、DB作成、マイグレーションまで一括実行
 - **ポート管理不要** - 通常の並行開発では手動でポート番号を管理する必要がありますが、irieならブランチ名ベースのURL（`feat-xxx.project.localhost`）でアクセス可能。ポート競合を気にせず何個でもworktreeを並行稼働
 - **hosts設定不要** - Traefik方式なら`*.localhost`はブラウザが自動解決、面倒なhosts編集は一切不要
 - **パスワード共有が簡単** - サブドメイン間でChromeの保存パスワードを共有。ルートドメインで一度ログインすれば、全worktreeで自動入力
