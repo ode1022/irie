@@ -11,7 +11,7 @@
       ]
     }
   },
-  "bootstrap-sha": "9bd9b3eb8f5852312349816024c8523a12ff54e7",
-  "last-release-sha": "9bd9b3eb8f5852312349816024c8523a12ff54e7",
+  "bootstrap-sha": "f23990c8fe3f66177ac5e81b3cb5b5db93302607",
+  "last-release-sha": "f23990c8fe3f66177ac5e81b3cb5b5db93302607",
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
 }
