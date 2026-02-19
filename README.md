@@ -21,6 +21,12 @@ Laravel、Rails、FastAPI等のフレームワークと相性が良く、複数�
 
 > **Note:** Dockerを使わないプロジェクトでも、`irie clone/convert/add/remove/list/cd/open`はworktree管理ツールとして使用できます（`irie init/override`以外）。
 
+## デモプロジェクト
+
+Laravelを使ったデモプロジェクトを用意しています。irieの動作を試したい方はこちらを参照してください。
+
+- [irie-demo-laravel](https://github.com/ode1022/irie-demo-laravel) - Laravel + PostgreSQL + Traefik のサンプル構成
+
 ## インストール
 
 ```bash

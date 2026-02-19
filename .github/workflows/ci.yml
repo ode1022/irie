@@ -5,9 +5,21 @@ on:
     branches:
       - main
       - 'claude/**'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.release-please-manifest.json'
+      - 'release-please-config.json'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.release-please-manifest.json'
+      - 'release-please-config.json'
   workflow_dispatch:
     inputs:
       run_macos:
