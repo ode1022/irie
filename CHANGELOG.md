@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/ode1022/irie/compare/irie-v1.1.0...irie-v1.1.1) (2026-02-20)
+
+
+### Bug Fixes
+
+* start-taskのClaude起動プロンプトを簡潔化して応答速度を改善 ([e939621](https://github.com/ode1022/irie/commit/e93962152b78e06c4d8fc0f22fdb9bb3b5208c83))
+
 ## [1.1.0](https://github.com/ode1022/irie/compare/irie-v1.0.5...irie-v1.1.0) (2026-02-19)
 
 
