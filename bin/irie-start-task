@@ -228,13 +228,11 @@ echo -e "${CYAN}Claude Codeを起動中...${NC}"
 
 cd "$WORKTREE_PATH"
 
-CLAUDE_PROMPT="タスクを開始します。
+CLAUDE_PROMPT="以下のタスクを実装してください。
 
-タスク情報: $TASK_INPUT
+タスク: $TASK_INPUT
 
-ブランチ「$BRANCH_NAME」は作成済みです（ベース: ${BASE_BRANCH:-デフォルト}）。新しいブランチを作成せず、現在のブランチで作業してください。
-
-作業内容を確認し、作業計画を立ててから実装を進めてください。
+ブランチ「$BRANCH_NAME」で作業中です（ベース: ${BASE_BRANCH:-デフォルト}）。新しいブランチの作成は不要です。
 URLが含まれている場合は、まずチケット詳細を取得してください。"
 
 exec claude "$CLAUDE_PROMPT"
