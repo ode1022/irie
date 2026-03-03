@@ -1013,7 +1013,7 @@ docker exec shared-postgres psql -U root -d postgres \
 
 | ソフト | 必須 | 最小バージョン | 確認済みバージョン | 備考 |
 |--------|------|---------------|-------------------|------|
-| Git | ✅ | 2.48.0 | 2.52.0 | `--relative-paths`オプションに必要 |
+| Git | ✅ | - | 2.52.0 | 2.48.0+で`--relative-paths`を自動付与（下記参照） |
 | Docker | ✅ | - | 28.1.1 | |
 | Docker Compose | ✅ | - | 2.35.1 | V2形式（`docker compose`コマンド） |
 | Bash | ✅ | 4.0 | 5.1.16 | |
@@ -1021,6 +1021,16 @@ docker exec shared-postgres psql -U root -d postgres \
 | Claude Code | ⭐ | - | - | `irie init`、`irie start-task`で使用（任意） |
 
 ※ Docker/Docker Composeの最小バージョンは未検証です。上記は動作確認済みのバージョンです。
+
+### Gitバージョンと`--relative-paths`について
+
+Git 2.48.0以降では、worktree作成時に`--relative-paths`オプションを自動付与します。このオプションはworktreeのメタデータに相対パスを使用し、JetBrains IDE（PhpStorm、WebStorm等）+ WSL2環境でのgit連携に必要です（[IJPL-72834](https://youtrack.jetbrains.com/issue/IJPL-72834)）。
+
+Git 2.48.0未満（macOS標準のgit等）では`--relative-paths`を省略して動作します。この場合、絶対パスが使用されるため以下の制限があります：
+
+- **JetBrains IDE + WSL2環境**: worktreeのgit連携が正常に動作しない場合があります。Git 2.48.0以上へのアップデートを推奨します
+- **VSCode、Cursor等**: 影響なし（絶対パスでも正常に動作）
+- **macOS**: JetBrains IDEでworktreeを使用する場合は `brew install git` で新しいバージョンをインストールしてください
 
 ### fzfについて
 

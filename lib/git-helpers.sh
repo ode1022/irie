@@ -197,6 +197,27 @@ is_in_worktree() {
     fi
 }
 
+# gitが --relative-paths オプションをサポートしているか判定（2.48.0以降）
+git_supports_relative_paths() {
+    local git_version
+    git_version=$(git --version | sed 's/git version //')
+    local major minor
+    major=$(echo "$git_version" | cut -d. -f1)
+    minor=$(echo "$git_version" | cut -d. -f2)
+    # --relative-paths was added in git 2.48.0
+    [ "$major" -gt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -ge 48 ]; }
+}
+
+# git worktree add のラッパー
+# Git 2.48.0+ では --relative-paths を自動付与（JetBrains IDE互換性のため）
+git_worktree_add() {
+    if git_supports_relative_paths; then
+        git worktree add --relative-paths "$@"
+    else
+        git worktree add "$@"
+    fi
+}
+
 # 現在のworktree名を取得
 get_current_worktree_name() {
     local current_dir="${1:-$(pwd)}"

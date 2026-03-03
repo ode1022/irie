@@ -135,10 +135,10 @@ if [ "$CREATE_MAIN" = true ]; then
         WORKTREE_NAME="main"
     fi
 
-    # 注: --relative-paths は必須。絶対パスだとJetBrains IDE + WSL2環境でgit連携が動作しない
+    # Git 2.48.0+ では --relative-paths を付与（JetBrains IDE + WSL2環境でのgit連携に必要）
     # https://youtrack.jetbrains.com/issue/IJPL-72834
     cd .bare
-    git worktree add --relative-paths "../$WORKTREE_NAME" "$BRANCH"
+    git_worktree_add "../$WORKTREE_NAME" "$BRANCH"
     cd ..
 fi
 

@@ -4,6 +4,7 @@
 # 実行: bats tests/test_bare.bats
 
 IRIE_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
+source "${IRIE_DIR}/lib/git-helpers.sh"
 
 setup() {
     # テスト用一時ディレクトリ（macOSでは/varが/private/varへのシンボリックリンクなので正規化）
@@ -365,9 +366,14 @@ teardown() {
 # === Relative path tests (JetBrains IDE + WSL2 support) ===
 # 相対パステスト（JetBrains IDE + WSL2対応）
 # https://youtrack.jetbrains.com/issue/IJPL-72834
+# Git 2.48.0+ では --relative-paths を自動付与、未満では省略
 
-# worktreeの.gitファイルが相対パスで記録される
+# worktreeの.gitファイルが相対パスで記録される（Git 2.48.0+）
 @test "irie clone: worktree .git file uses relative path" {
+    if ! git_supports_relative_paths; then
+        skip "Git $(git --version) does not support --relative-paths (requires 2.48.0+)"
+    fi
+
     # ソースリポジトリを作成
     mkdir -p "$TEST_TMP_DIR/source-repo"
     cd "$TEST_TMP_DIR/source-repo"
@@ -393,8 +399,12 @@ teardown() {
     [[ "$gitdir_content" =~ ^gitdir:\ \.\. ]]
 }
 
-# convert後もworktreeの.gitファイルが相対パスで記録される
+# convert後もworktreeの.gitファイルが相対パスで記録される（Git 2.48.0+）
 @test "irie convert: worktree .git file uses relative path" {
+    if ! git_supports_relative_paths; then
+        skip "Git $(git --version) does not support --relative-paths (requires 2.48.0+)"
+    fi
+
     # 通常のgitリポジトリを作成
     mkdir -p "$TEST_TMP_DIR/normal-repo"
     cd "$TEST_TMP_DIR/normal-repo"
@@ -419,8 +429,12 @@ teardown() {
     [[ "$gitdir_content" =~ ^gitdir:\ \.\. ]]
 }
 
-# .bare/worktrees/xxx/gitdirも相対パスで記録される
+# .bare/worktrees/xxx/gitdirも相対パスで記録される（Git 2.48.0+）
 @test "irie clone: .bare/worktrees/xxx/gitdir uses relative path" {
+    if ! git_supports_relative_paths; then
+        skip "Git $(git --version) does not support --relative-paths (requires 2.48.0+)"
+    fi
+
     # ソースリポジトリを作成
     mkdir -p "$TEST_TMP_DIR/source-repo"
     cd "$TEST_TMP_DIR/source-repo"
@@ -446,6 +460,113 @@ teardown() {
     [[ "$gitdir_content" =~ ^\.\. ]]
 }
 
+# === Old Git fallback tests (--relative-paths unavailable) ===
+# 古いGit（2.48.0未満）では --relative-paths なしで動作し、絶対パスになる
+
+# 古いGitを偽装するラッパーを作成するヘルパー
+_create_old_git_wrapper() {
+    local wrapper_dir="$TEST_TMP_DIR/fake-old-git"
+    local real_git
+    real_git=$(command -v git)
+    mkdir -p "$wrapper_dir"
+    cat > "$wrapper_dir/git" << WRAPPER
+#!/bin/bash
+if [ "\$1" = "--version" ]; then
+    echo "git version 2.39.5"
+    exit 0
+fi
+for arg in "\$@"; do
+    if [ "\$arg" = "--relative-paths" ]; then
+        echo "ERROR: --relative-paths should not be passed to old git" >&2
+        exit 128
+    fi
+done
+exec "$real_git" "\$@"
+WRAPPER
+    chmod +x "$wrapper_dir/git"
+    echo "$wrapper_dir"
+}
+
+# 古いGitでirie cloneが成功し、絶対パスになる
+@test "old git: irie clone uses absolute paths when git < 2.48.0" {
+    local wrapper_dir
+    wrapper_dir=$(_create_old_git_wrapper)
+
+    # ソースリポジトリを作成（本物のgitで）
+    mkdir -p "$TEST_TMP_DIR/source-repo"
+    cd "$TEST_TMP_DIR/source-repo"
+    git init -b main
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    echo "test" > test.txt
+    git add .
+    git commit -m "Initial"
+
+    # 偽装gitでクローン
+    cd "$TEST_TMP_DIR"
+    PATH="$wrapper_dir:$PATH" run "$IRIE_DIR/bin/irie" clone "$TEST_TMP_DIR/source-repo" test-project
+    [ "$status" -eq 0 ]
+
+    # .gitファイルが絶対パスであることを確認
+    local gitdir_content
+    gitdir_content=$(cat "$TEST_TMP_DIR/test-project/main/.git")
+    [[ "$gitdir_content" =~ ^gitdir:\ / ]]
+}
+
+# 古いGitでirie addが成功し、絶対パスになる
+@test "old git: irie add uses absolute paths when git < 2.48.0" {
+    local wrapper_dir
+    wrapper_dir=$(_create_old_git_wrapper)
+
+    # ソースリポジトリを作成（本物のgitで）
+    mkdir -p "$TEST_TMP_DIR/source-repo"
+    cd "$TEST_TMP_DIR/source-repo"
+    git init -b main
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    echo "test" > test.txt
+    git add .
+    git commit -m "Initial"
+
+    # 偽装gitでクローン＋add
+    cd "$TEST_TMP_DIR"
+    PATH="$wrapper_dir:$PATH" "$IRIE_DIR/bin/irie" clone "$TEST_TMP_DIR/source-repo" test-project
+
+    cd "$TEST_TMP_DIR/test-project/main"
+    PATH="$wrapper_dir:$PATH" run "$IRIE_DIR/bin/irie" add feat/test-feature
+    [ "$status" -eq 0 ]
+
+    # .gitファイルが絶対パスであることを確認
+    local gitdir_content
+    gitdir_content=$(cat "$TEST_TMP_DIR/test-project/test-feature/.git")
+    [[ "$gitdir_content" =~ ^gitdir:\ / ]]
+}
+
+# 古いGitでirie convertが成功し、絶対パスになる
+@test "old git: irie convert uses absolute paths when git < 2.48.0" {
+    local wrapper_dir
+    wrapper_dir=$(_create_old_git_wrapper)
+
+    # 通常のgitリポジトリを作成（本物のgitで）
+    mkdir -p "$TEST_TMP_DIR/normal-repo"
+    cd "$TEST_TMP_DIR/normal-repo"
+    git init -b main
+    git config user.email "test@example.com"
+    git config user.name "Test User"
+    echo "test" > test.txt
+    git add .
+    git commit -m "Initial"
+
+    # 偽装gitでconvert
+    PATH="$wrapper_dir:$PATH" run "$IRIE_DIR/bin/irie" convert
+    [ "$status" -eq 0 ]
+
+    # .gitファイルが絶対パスであることを確認
+    local gitdir_content
+    gitdir_content=$(cat "$TEST_TMP_DIR/normal-repo/main/.git")
+    [[ "$gitdir_content" =~ ^gitdir:\ / ]]
+}
+
 # === irie remove tests ===
 # irie remove テスト
 
@@ -467,7 +588,7 @@ teardown() {
 
     # feature-1 worktreeを作成
     cd "$TEST_TMP_DIR/test-project/.bare"
-    git worktree add --relative-paths ../feature-1 -b feature-1 main
+    git_worktree_add ../feature-1 -b feature-1 main
 
     # feature-1に移動して削除
     cd "$TEST_TMP_DIR/test-project/feature-1"
@@ -518,7 +639,7 @@ teardown() {
 
     # feature-1 worktreeを作成
     cd "$TEST_TMP_DIR/test-project/.bare"
-    git worktree add --relative-paths ../feature-1 -b feature-1 main
+    git_worktree_add ../feature-1 -b feature-1 main
 
     # feature-1に移動して削除
     cd "$TEST_TMP_DIR/test-project/feature-1"

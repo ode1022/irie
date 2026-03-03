@@ -203,10 +203,10 @@ echo "$CURRENT_COMMIT" > "$TARGET_DIR/.bare/refs/heads/__irie_temp_detach__"
 
 # worktreeを正式に作成（これでメタデータが正しく生成される）
 # 注: --git-dirを使うと絶対パスになるため、.bare内に移動して実行
-# 注: --relative-paths は必須。絶対パスだとJetBrains IDE + WSL2環境でgit連携が動作しない
+# Git 2.48.0+ では --relative-paths を付与（JetBrains IDE + WSL2環境でのgit連携に必要）
 # https://youtrack.jetbrains.com/issue/IJPL-72834
 cd "$TARGET_DIR/.bare"
-git worktree add --relative-paths ../main "$CURRENT_BRANCH"
+git_worktree_add ../main "$CURRENT_BRANCH"
 cd "$TARGET_DIR"
 
 # 一時ブランチを削除してHEADを復元

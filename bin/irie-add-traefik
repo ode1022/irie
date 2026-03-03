@@ -235,7 +235,7 @@ if [ -d "$WORKTREE_PATH" ]; then
     echo -e "${YELLOW}警告: worktree '$DIR_NAME' は既に存在します${NC}"
 else
     # Bare構成の場合は.bare内から実行して相対パスを維持
-    # 注: --relative-paths は必須。絶対パスだとJetBrains IDE + WSL2環境でgit連携が動作しない
+    # Git 2.48.0+ では --relative-paths を付与（JetBrains IDE + WSL2環境でのgit連携に必要）
     # https://youtrack.jetbrains.com/issue/IJPL-72834
     if [ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT/.bare" ]; then
         cd "$PROJECT_ROOT/.bare"
@@ -254,7 +254,7 @@ else
         else
             echo -e "${BLUE}  → 既存ブランチ ${BRANCH_NAME} をチェックアウト${NC}"
         fi
-        git worktree add --relative-paths "../$DIR_NAME" "$BRANCH_NAME"
+        git_worktree_add "../$DIR_NAME" "$BRANCH_NAME"
     else
         # 新規ブランチを作成
         # --baseが未指定なら現在のブランチをベースにする
@@ -267,9 +267,9 @@ else
         fi
         if [ -n "$BASE_BRANCH" ]; then
             echo -e "${BLUE}  → ${BASE_BRANCH} から新しいブランチを作成${NC}"
-            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
+            git_worktree_add "../$DIR_NAME" -b "$BRANCH_NAME" "$BASE_BRANCH"
         else
-            git worktree add --relative-paths "../$DIR_NAME" -b "$BRANCH_NAME"
+            git_worktree_add "../$DIR_NAME" -b "$BRANCH_NAME"
         fi
     fi
     echo -e "${GREEN}✓ Worktree作成完了${NC}"
