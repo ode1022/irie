@@ -142,7 +142,8 @@ _irie_completions() {
                     COMPREPLY=($(compgen -W "${open_opts}" -- "${cur}"))
                     ;;
                 override)
-                    COMPREPLY=($(compgen -W "traefik" -- "${cur}"))
+                    local override_opts="--setup --help"
+                    COMPREPLY=($(compgen -W "${override_opts}" -- "${cur}"))
                     ;;
             esac
             ;;
@@ -350,15 +351,9 @@ _irie() {
                         '--help[ヘルプを表示]'
                     ;;
                 override)
-                    if (( CURRENT == 3 )); then
-                        local modes
-                        modes=('traefik:Traefik方式のoverride.ymlを生成')
-                        _describe -t modes 'modes' modes
-                    else
-                        _arguments \
-                            '--setup[生成後にコンテナ起動とpost-setup.shを実行]' \
-                            '--help[ヘルプを表示]'
-                    fi
+                    _arguments \
+                        '--setup[生成後にコンテナ起動とpost-setup.shを実行]' \
+                        '--help[ヘルプを表示]'
                     ;;
                 start-task)
                     _arguments \

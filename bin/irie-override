@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # irie override - テンプレートからdocker-compose.override.ymlを生成
-# Usage: irie override <traefik|loopback|loopback-shared-db> [--setup]
+# Usage: irie override [--setup]
 
 set -e
 

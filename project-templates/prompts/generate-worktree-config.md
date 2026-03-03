@@ -9,7 +9,7 @@
 irie関連ファイルが既に存在する場合（`docker-compose.override.traefik-example.yml`等）：
 - ファイル生成はスキップ
 - **.envファイルのセットアップのみを実行**
-- セットアップ完了後、`irie override traefik --setup`を実行
+- セットアップ完了後、`irie override --setup`を実行
 
 これにより、`irie clone`後に`irie init`を実行するだけで環境構築が完了します。
 
@@ -186,12 +186,10 @@ services:
 
 プロジェクトルートに以下のファイルを生成：
 
-1. `docker-compose.override.traefik-example.yml` - Traefik方式用
-2. `docker-compose.override.loopback-example.yml` - Loopback方式（独立DB）用
-3. `docker-compose.override.loopback-shared-db-example.yml` - Loopback方式（共有DB）用
-4. `post-setup.sh` - 初期化スクリプト（実行可能権限を付与）
-5. `post-cleanup.sh` - クリーンアップスクリプト（実行可能権限を付与）
-6. `WORKTREE.md` - ドキュメント
+1. `docker-compose.override.traefik-example.yml` - Traefik方式用テンプレート
+2. `post-setup.sh` - 初期化スクリプト（実行可能権限を付与）
+3. `post-cleanup.sh` - クリーンアップスクリプト（実行可能権限を付与）
+4. `WORKTREE.md` - ドキュメント
 
 ## 生成ルール
 
@@ -223,7 +221,6 @@ services:
 - `{{FQDN}}` - 完全修飾ドメイン名
 - `{{TRAEFIK_ID}}` - Traefikルーター識別子
 - `{{DB_NAME}}` - データベース名
-- `{{LOOPBACK_IP}}` - ループバックIP
 
 ### コンテナグループ名
 `name: <プロジェクト名>-{{DIR_NAME}}`を指定してworktreeごとにコンテナを分離する。
@@ -293,12 +290,6 @@ app:
     # 共有DB使用時
     DB_HOST: shared-postgres  # または shared-mysql
 ```
-
-### Loopback方式の設定ポイント
-- ポートに `{{LOOPBACK_IP}}:` プレフィックスを追加
-- 共有DB版は `networks:` に `shared-db` を追加、DBを無効化
-- 共有DB版でDBに`depends_on`/`links`しているサービスは無効化
-- 独立DB版はDBポートにも `{{LOOPBACK_IP}}:` を追加
 
 ### post-setup.sh
 プロジェクトの初期化処理を記述。**コメントアウトではなく、実際に実行されるコードとして生成すること。**
@@ -439,10 +430,8 @@ git remote get-url origin | sed 's/.*\///' | sed 's/\.git$//'
 ## 完了後の処理
 
 ### 新規プロジェクトの場合
-ファイル生成完了後、`irie override traefik --setup` を実行してください。
+ファイル生成完了後、`irie override --setup` を実行してください。
 docker-compose.override.ymlの生成、コンテナ起動、post-setup.shの実行まで一括で行います。
-（Loopback方式の場合は `irie override loopback --setup`）
 
 ### irie対応済みプロジェクトの場合
-.envセットアップ完了後、`irie override traefik --setup` を実行してください。
-（Loopback方式の場合は `irie override loopback --setup`）
+.envセットアップ完了後、`irie override --setup` を実行してください。

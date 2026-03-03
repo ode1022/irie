@@ -32,7 +32,7 @@ irie - Git Worktree + Docker 並行開発ツール
   info                  worktree情報表示
   config                設定の表示・変更
   init                  Claude Codeでプロジェクト用テンプレートを生成
-  override <mode>       テンプレートからdocker-compose.override.ymlを生成
+  override              テンプレートからdocker-compose.override.ymlを生成
   start-task <info>     タスク情報からブランチ作成＆Claude Code起動
   update                irieを最新版に更新
   shell-init            シェル統合スクリプトを出力（irie cd用）

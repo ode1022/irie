@@ -53,7 +53,7 @@ cd my-project/main
 irie init
 # → 共有DBが未起動なら自動セットアップ
 # → .envのコピー・設定
-# → irie override traefik --setup を実行
+# → irie override --setup を実行
 
 # または手動セットアップ（Claude Codeがない場合）
 # → 「共有サービス」セクションと「手動で作成する場合」セクションを参照
@@ -106,7 +106,7 @@ irie convert
 | `irie clone <url>` | Bare構成でクローン |
 | `irie convert` | 既存リポジトリをBare構成に変換 |
 | `irie init` | テンプレートを自動生成（Claude Code連携） |
-| `irie override <mode>` | テンプレートからdocker-compose.override.ymlを生成 |
+| `irie override` | テンプレートからdocker-compose.override.ymlを生成 |
 | `irie start-task <info>` | タスク情報からブランチ作成＆Claude Code起動 |
 | `irie update` | irie自体を更新 |
 
@@ -516,16 +516,11 @@ irie open --setup
 cd my-project/main
 
 # docker-compose.override.ymlのみ生成
-irie override traefik
+irie override
 
 # 生成 + コンテナ起動 + post-setup.sh実行（初回セットアップ用）
-irie override traefik --setup
+irie override --setup
 ```
-
-**モード:**
-| モード | 説明 |
-|--------|------|
-| `traefik` | Traefik方式（共有DB） |
 
 **--setupオプション:**
 初回のmainセットアップ時に使用。以下を一括実行：
@@ -808,7 +803,7 @@ your-project/
 mainで使用する場合は、テンプレート作成後に`irie override`でdocker-compose.override.ymlを生成：
 
 ```bash
-irie override traefik
+irie override
 ```
 
 ### post-setup.sh / post-cleanup.sh
