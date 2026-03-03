@@ -13,10 +13,12 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 IRIE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SHARED_SERVICES_DIR="${IRIE_DIR}/shared-services"
 
 # ヘルパー関数を読み込み
 source "${IRIE_DIR}/lib/helpers.sh"
 source "${IRIE_DIR}/lib/git-helpers.sh"
+source "${IRIE_DIR}/lib/shared-services.sh"
 
 show_help() {
     cat << 'EOF'
@@ -146,6 +148,9 @@ echo -e "${GREEN}✓ $OVERRIDE_FILE を生成しました${NC}"
 if [ "$RUN_SETUP" = true ]; then
     echo ""
     echo -e "${BLUE}=== セットアップ実行 ===${NC}"
+
+    # Traefikの起動を確認（未起動なら自動起動）
+    ensure_traefik_running "$SHARED_SERVICES_DIR"
 
     # コンテナ起動
     echo -e "${GREEN}  → docker compose up -d${NC}"

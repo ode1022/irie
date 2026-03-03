@@ -29,6 +29,7 @@ SHARED_SERVICES_DIR="${IRIE_DIR}/shared-services"
 # ヘルパー関数を読み込み
 source "${IRIE_DIR}/lib/helpers.sh"
 source "${IRIE_DIR}/lib/git-helpers.sh"
+source "${IRIE_DIR}/lib/shared-services.sh"
 
 # カレントディレクトリを基準とする
 CURRENT_DIR="$(pwd)"
@@ -318,47 +319,9 @@ cd "$WORKTREE_PATH"
 if [ -f "docker-compose.yaml" ] || [ -f "docker-compose.yml" ]; then
     echo -e "${GREEN}[4/6] Dockerコンテナを起動中...${NC}"
 
-    # shared-servicesの定義ファイルを準備（テンプレートからコピー）
-    setup_shared_service() {
-        local SERVICE_NAME=$1
-        local SERVICE_FILE="${SHARED_SERVICES_DIR}/${SERVICE_NAME}.yml"
-        local TEMPLATE_FILE="${SHARED_SERVICES_DIR}/templates/${SERVICE_NAME}.yml"
-
-        if [ ! -f "$SERVICE_FILE" ]; then
-            if [ -f "$TEMPLATE_FILE" ]; then
-                echo -e "${BLUE}  → ${SERVICE_NAME}.yml をテンプレートからコピー${NC}"
-                cp "$TEMPLATE_FILE" "$SERVICE_FILE"
-            else
-                echo -e "${RED}エラー: テンプレート ${TEMPLATE_FILE} が見つかりません${NC}"
-                exit 1
-            fi
-        fi
-    }
-
     # Traefikの起動を確認（複数プロジェクトで共有、テンプレートがある場合のみ）
     if [ "$HAS_DOCKER_TEMPLATE" = true ]; then
-        TRAEFIK_CONTAINER="shared-traefik"
-        if ! docker ps --format '{{.Names}}' | grep -q "${TRAEFIK_CONTAINER}"; then
-            echo -e "${BLUE}  → Traefikを起動中...${NC}"
-
-            # traefik.ymlをテンプレートからコピー
-            setup_shared_service "traefik"
-
-            # generate-certs.shをテンプレートからコピー（存在しない場合）
-            GENERATE_CERTS="${SHARED_SERVICES_DIR}/generate-certs.sh"
-            if [ ! -f "$GENERATE_CERTS" ]; then
-                cp "${SHARED_SERVICES_DIR}/templates/generate-certs.sh" "$GENERATE_CERTS"
-                chmod +x "$GENERATE_CERTS"
-            fi
-
-            # 証明書を生成（存在しない場合のみ）
-            cd "$SHARED_SERVICES_DIR"
-            bash "$GENERATE_CERTS"
-
-            # Traefikを起動
-            docker compose -f traefik.yml up -d
-        fi
-        echo -e "${GREEN}  ✓ Traefikは起動中${NC}"
+        ensure_traefik_running "$SHARED_SERVICES_DIR"
     fi
 
     # worktreeのコンテナを起動
