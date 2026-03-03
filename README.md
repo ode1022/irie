@@ -1008,7 +1008,7 @@ docker exec shared-postgres psql -U root -d postgres \
 
 | ソフト | 必須 | 最小バージョン | 確認済みバージョン | 備考 |
 |--------|------|---------------|-------------------|------|
-| Git | ✅ | - | 2.52.0 | 2.48.0+で`--relative-paths`を自動付与（下記参照） |
+| Git | ✅ | 2.17.0 | 2.52.0 | 2.48.0+で`--relative-paths`を自動付与（下記参照） |
 | Docker | ✅ | - | 28.1.1 | |
 | Docker Compose | ✅ | - | 2.35.1 | V2形式（`docker compose`コマンド） |
 | Bash | ✅ | 4.0 | 5.1.16 | |
