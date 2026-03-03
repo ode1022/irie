@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.2](https://github.com/ode1022/irie/compare/irie-v1.1.1...irie-v1.1.2) (2026-03-03)
+
+
+### Bug Fixes
+
+* --relative-pathsをGitバージョンに応じて条件付き付与し古いGitでも動作可能に ([ff570b2](https://github.com/ode1022/irie/commit/ff570b2ad224e7eb7a599252bd10baa2140e90e2))
+* irie overrideからmode引数(traefik)を削除 ([b296e6d](https://github.com/ode1022/irie/commit/b296e6d3b305c393447b1935fa706fe8306ca1a3))
+* irie overrideからmode引数を削除、--setupでTraefikを自動起動 ([3895132](https://github.com/ode1022/irie/commit/3895132bdbde44d14569f8fa2d153a4e82103f3f))
+
 ## [1.1.1](https://github.com/ode1022/irie/compare/irie-v1.1.0...irie-v1.1.1) (2026-02-20)
 
 
