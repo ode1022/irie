@@ -1045,6 +1045,53 @@ brew install fzf
 
 ## トラブルシューティング
 
+### Dockerネットワークのサブネット枯渇
+
+`irie add` / `irie start-task` 実行時に以下のエラーが出る場合：
+
+```
+Error response from daemon: all predefined address pools have been fully subnetted
+failed to create network ...
+```
+
+**原因:**
+worktreeごとにDocker Composeが独立したbridgeネットワーク（`<project>_default`）を作成し、それぞれに/24サブネットが割り当てられます。Docker daemonのデフォルトのアドレスプールは概ね30個程度の/24で頭打ちになるため、worktreeが増えると枯渇します。停止したworktreeでもネットワークだけ残っているケースが原因になりやすいです。
+
+**現状確認:**
+```bash
+docker network ls | wc -l       # 30個前後で要注意
+docker network ls                # 残骸ネットワークを目視
+```
+
+**対処A: 未使用ネットワークを削除（応急処置・推奨）**
+
+`docker network prune` は「コンテナがattachされていないネットワーク」のみ削除します。起動中のコンテナと共有サービスは影響を受けません。停止中のworktreeは次回 `docker compose up` 時にネットワークが再作成されるだけです。
+
+```bash
+docker network prune -f
+```
+
+**対処B: アドレスプールを拡張（恒久対策）**
+
+worktreeを常時20個以上並行運用するなら、Docker daemonの`default-address-pools`を広げる方法もあります。`/etc/docker/daemon.json` を編集：
+
+```json
+{
+  "default-address-pools": [
+    {"base": "172.17.0.0/12", "size": 24}
+  ]
+}
+```
+
+設定変更後はDocker daemonの再起動が必要です（全コンテナが一時停止します）。
+
+```bash
+sudo systemctl restart docker
+# WSL2の場合は: wsl --shutdown してWSLを再起動
+```
+
+理論上の上限は約4096サブネットになります。
+
 ### 502 Bad Gateway / 504 Gateway Timeout
 
 Traefikがバックエンドに接続できない場合に発生します。以下を順に試してください：
