@@ -39,14 +39,14 @@ create_ide() {
 # === jetbrains_folder_version ===
 
 # フォルダ名末尾のバージョンを取り出す
-@test "jetbrains_folder_version: バージョン付きフォルダ名からバージョンを取り出す" {
+@test "jetbrains_folder_version: extracts version from versioned folder name" {
     run jetbrains_folder_version "PhpStorm 2026.2.2"
     [ "$status" -eq 0 ]
     [ "$output" = "2026.2.2" ]
 }
 
 # バージョンが付かないフォルダ名は0扱い
-@test "jetbrains_folder_version: バージョンが無い場合は0を返す" {
+@test "jetbrains_folder_version: returns 0 when folder name has no version" {
     run jetbrains_folder_version "PhpStorm"
     [ "$status" -eq 0 ]
     [ "$output" = "0" ]
@@ -55,7 +55,7 @@ create_ide() {
 # === detect_wsl_jetbrains ===
 
 # Program Files 配下のみの場合でも検出できる（従来の動作）
-@test "detect_wsl_jetbrains: Program Files 配下を検出する" {
+@test "detect_wsl_jetbrains: detects IDE under Program Files" {
     create_ide "$PROGRAM_FILES" "PhpStorm 2025.2.6"
 
     IRIE_JETBRAINS_ROOTS="$PROGRAM_FILES:$LOCAL_PROGRAMS" run detect_wsl_jetbrains
@@ -64,7 +64,7 @@ create_ide() {
 }
 
 # ユーザー単位インストール（AppData\Local\Programs）も検出できる
-@test "detect_wsl_jetbrains: AppData\\Local\\Programs 配下を検出する" {
+@test "detect_wsl_jetbrains: detects IDE under AppData Local Programs" {
     create_ide "$LOCAL_PROGRAMS" "PhpStorm 2026.2.2"
 
     IRIE_JETBRAINS_ROOTS="$PROGRAM_FILES:$LOCAL_PROGRAMS" run detect_wsl_jetbrains
@@ -73,7 +73,7 @@ create_ide() {
 }
 
 # インストール先が違っても、バージョンが新しい方が選ばれる
-@test "detect_wsl_jetbrains: インストール先をまたいで最新バージョンを選ぶ" {
+@test "detect_wsl_jetbrains: picks newest version across install locations" {
     create_ide "$PROGRAM_FILES" "PhpStorm 2023.2.2"
     create_ide "$PROGRAM_FILES" "PhpStorm 2025.2.6"
     create_ide "$LOCAL_PROGRAMS" "PhpStorm 2026.2.2"
@@ -84,7 +84,7 @@ create_ide() {
 }
 
 # 古いバージョンがユーザー単位インストール側にあっても、新しい方（Program Files側）が選ばれる
-@test "detect_wsl_jetbrains: ユーザー単位インストールが古い場合はProgram Files側を選ぶ" {
+@test "detect_wsl_jetbrains: picks Program Files when per-user install is older" {
     create_ide "$PROGRAM_FILES" "PhpStorm 2026.2.2"
     create_ide "$LOCAL_PROGRAMS" "PhpStorm 2025.2.6"
 
@@ -94,7 +94,7 @@ create_ide() {
 }
 
 # 実行ファイルが無いフォルダは候補にしない
-@test "detect_wsl_jetbrains: 実行ファイルが無いフォルダは無視する" {
+@test "detect_wsl_jetbrains: ignores folder without executable" {
     create_ide "$PROGRAM_FILES" "PhpStorm 2025.2.6"
     mkdir -p "$LOCAL_PROGRAMS/PhpStorm 2026.2.2/bin"
 
@@ -104,7 +104,7 @@ create_ide() {
 }
 
 # 存在しない検索ルートが混ざっていてもエラーにしない
-@test "detect_wsl_jetbrains: 存在しない検索ルートは無視する" {
+@test "detect_wsl_jetbrains: ignores non-existent search root" {
     create_ide "$LOCAL_PROGRAMS" "PhpStorm 2026.2.2"
 
     IRIE_JETBRAINS_ROOTS="$TEST_TMP_DIR/not-exists:$LOCAL_PROGRAMS" run detect_wsl_jetbrains
@@ -113,14 +113,14 @@ create_ide() {
 }
 
 # IDEが1つも無い場合は何も出力しない
-@test "detect_wsl_jetbrains: 未インストールなら何も出力しない" {
+@test "detect_wsl_jetbrains: outputs nothing when no IDE is installed" {
     IRIE_JETBRAINS_ROOTS="$PROGRAM_FILES:$LOCAL_PROGRAMS" run detect_wsl_jetbrains
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
 
 # 複数種類のIDEをそれぞれ検出する
-@test "detect_wsl_jetbrains: 複数のIDEをそれぞれ検出する" {
+@test "detect_wsl_jetbrains: detects multiple IDEs" {
     create_ide "$PROGRAM_FILES" "DataGrip 2025.1.3" "datagrip64.exe"
     create_ide "$LOCAL_PROGRAMS" "PhpStorm 2026.2.2"
 
