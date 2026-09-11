@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/ode1022/irie/compare/irie-v1.1.2...irie-v1.1.3) (2026-09-11)
+
+
+### Bug Fixes
+
+* WSLのJetBrains IDE検出にユーザー単位インストール先を追加 ([78d583a](https://github.com/ode1022/irie/commit/78d583a57b574270091f1f3bed4bc2be63faa06f))
+* WSLのJetBrains IDE検出にユーザー単位インストール先を追加 ([644edca](https://github.com/ode1022/irie/commit/644edca1c71037c830fe8b5e0c57222f0bd7a733))
+
 ## [1.1.2](https://github.com/ode1022/irie/compare/irie-v1.1.1...irie-v1.1.2) (2026-03-03)
 
 
