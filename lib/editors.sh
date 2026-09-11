@@ -71,10 +71,42 @@ JETBRAINS_LINUX_CMDS=(
     "studio|AndroidStudio"
 )
 
+# === WSL用: JetBrains IDEの検索ルート ===
+# 全ユーザー向けインストーラは C:\Program Files\JetBrains 配下、
+# ユーザー単位インストール（既定のインストーラ設定）は %LOCALAPPDATA%\Programs 配下に入る
+# IRIE_JETBRAINS_ROOTS（コロン区切り）を設定すると検索ルートを上書きできる（テスト用）
+wsl_jetbrains_roots() {
+    if [ -n "$IRIE_JETBRAINS_ROOTS" ]; then
+        echo "$IRIE_JETBRAINS_ROOTS" | tr ':' '\n'
+        return
+    fi
+
+    local root
+    for root in "/mnt/c/Program Files/JetBrains" "/mnt/c/Program Files (x86)/JetBrains"; do
+        [ -d "$root" ] && echo "$root"
+    done
+    for root in /mnt/c/Users/*/AppData/Local/Programs; do
+        [ -d "$root" ] && echo "$root"
+    done
+}
+
+# フォルダ名末尾のバージョンを取り出す（例: "PhpStorm 2026.2.2" → "2026.2.2"）
+# バージョンが付かないフォルダは 0 として扱い、バージョン付きを優先する
+jetbrains_folder_version() {
+    local version
+    version=$(printf '%s' "$1" | grep -oE '[0-9]+(\.[0-9]+)*$' || true)
+    if [ -z "$version" ]; then
+        echo "0"
+    else
+        echo "$version"
+    fi
+}
+
 # === WSL用: JetBrains IDE動的検出 ===
 detect_wsl_jetbrains() {
-    local jetbrains_dir="/mnt/c/Program Files/JetBrains"
-    [ ! -d "$jetbrains_dir" ] && return
+    local roots
+    roots=$(wsl_jetbrains_roots)
+    [ -z "$roots" ] && return
 
     local entry
     for entry in "${JETBRAINS_IDES[@]}"; do
@@ -83,11 +115,27 @@ detect_wsl_jetbrains() {
         local exe_name="${rest%%|*}"
         local display_name="${rest#*|}"
 
-        # 最新バージョンのフォルダを取得
-        local latest
-        latest=$(ls -d "$jetbrains_dir/$ide_pattern"* 2>/dev/null | sort -V | tail -1)
+        # 全ルートから候補を集め、フォルダ名のバージョンで比較して最新を選ぶ
+        # パス文字列のままソートするとインストール先の違いでバージョン順が崩れるため、
+        # 「バージョン<TAB>パス」の形にしてからソートする
+        local candidates
+        candidates=$(
+            while IFS= read -r root; do
+                [ -n "$root" ] || continue
+                local candidate
+                for candidate in "$root/$ide_pattern"*; do
+                    [ -f "$candidate/bin/$exe_name" ] || continue
+                    printf '%s\t%s\n' "$(jetbrains_folder_version "${candidate##*/}")" "$candidate"
+                done
+            done <<EOF
+$roots
+EOF
+        )
 
-        if [ -n "$latest" ] && [ -f "$latest/bin/$exe_name" ]; then
+        local latest
+        latest=$(printf '%s\n' "$candidates" | sort -V | tail -1 | cut -f2-)
+
+        if [ -n "$latest" ]; then
             local id
             id=$(echo "$display_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
             echo "${id}:${display_name}:${latest}/bin/${exe_name}"

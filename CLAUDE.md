@@ -61,6 +61,25 @@ bats tests/
 bats tests/test_name_conversion.bats
 ```
 
+### テスト名は英語で書く
+
+`@test "..."` のテスト名に日本語（非ASCII文字）を使わないこと。
+
+macOSのbatsは日本語を含むテスト名を解決できず、`bats: unknown test name` となって
+**そのファイルのテストが1件も実行されない**。TAPの計画数と実行数がずれるため、
+`Executed 135 instead of expected 145 tests` でCI（test-macos）が失敗する。
+Linux側は成功するので、ローカルで気づきにくい。
+
+```bash
+# Good
+@test "detect_wsl_jetbrains: picks newest version across install locations" {
+
+# Bad（macOSで実行されない）
+@test "detect_wsl_jetbrains: インストール先をまたいで最新バージョンを選ぶ" {
+```
+
+テスト名は英語、テスト内のコメントは日本語でよい。
+
 ## リリース
 
 - mainブランチへのpushでrelease-pleaseが自動実行される

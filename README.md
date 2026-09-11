@@ -468,6 +468,12 @@ irie open --setup      # エディタを再設定
 
 JetBrains IDEはインストールされているものを動的に検出します（最新バージョン優先）。
 
+WSLでは以下のインストール先を検索し、フォルダ名のバージョン番号が最も新しいものを選びます（インストール先が違っても比較します）。
+
+- `C:\Program Files\JetBrains\`（全ユーザー向けインストール）
+- `C:\Program Files (x86)\JetBrains\`
+- `C:\Users\<ユーザー名>\AppData\Local\Programs\`（ユーザー単位インストール）
+
 **JetBrains IDE（動的検出）:**
 - PhpStorm, WebStorm, IntelliJ IDEA, PyCharm, RubyMine
 - GoLand, CLion, DataGrip, Rider, Fleet
@@ -488,7 +494,7 @@ JetBrains IDEはインストールされているものを動的に検出しま�
 
 | プラットフォーム | 検出方法 |
 |-----------------|---------|
-| **WSL** | `/mnt/c/Program Files/JetBrains/` を動的スキャン、`/mnt/c/Users/*/AppData/` 等を探索 |
+| **WSL** | `/mnt/c/Program Files/JetBrains/`、`/mnt/c/Program Files (x86)/JetBrains/`、`/mnt/c/Users/*/AppData/Local/Programs/` を動的スキャン |
 | **macOS** | `/Applications/*.app` の存在確認 |
 | **Linux** | `command -v`、snap/flatpakパス、JetBrains Toolboxパスを順に探索 |
 
